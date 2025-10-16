@@ -198,3 +198,8 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 export default logger;
+
+// Make logger available globally for content scripts
+if (typeof window !== 'undefined') {
+  window.Logger = logger;
+}

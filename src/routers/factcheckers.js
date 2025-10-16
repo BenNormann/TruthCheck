@@ -246,4 +246,11 @@ class FactCheckerRouter {
   }
 }
 
-export default FactCheckerRouter;
+// Create and export singleton instance
+const factCheckerRouter = new FactCheckerRouter();
+export default factCheckerRouter;
+
+// Make factCheckerRouter available globally for content scripts
+if (typeof window !== 'undefined') {
+  window.FactCheckerRouter = factCheckerRouter;
+}

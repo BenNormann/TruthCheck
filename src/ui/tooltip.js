@@ -320,4 +320,11 @@ class Tooltip {
   }
 }
 
-export default Tooltip;
+// Create and export singleton instance
+const tooltip = new Tooltip();
+export default tooltip;
+
+// Make tooltip available globally for content scripts
+if (typeof window !== 'undefined') {
+  window.Tooltip = tooltip;
+}

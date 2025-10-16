@@ -280,4 +280,11 @@ class OverrideEngine {
   }
 }
 
-export default OverrideEngine;
+// Create and export singleton instance
+const overrideEngine = new OverrideEngine();
+export default overrideEngine;
+
+// Make overrideEngine available globally for content scripts
+if (typeof window !== 'undefined') {
+  window.OverrideEngine = overrideEngine;
+}

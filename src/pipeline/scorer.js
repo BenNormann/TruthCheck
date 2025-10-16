@@ -439,4 +439,11 @@ class Scorer {
   }
 }
 
-export default Scorer;
+// Create and export singleton instance
+const scorer = new Scorer();
+export default scorer;
+
+// Make scorer available globally for content scripts
+if (typeof window !== 'undefined') {
+  window.Scorer = scorer;
+}

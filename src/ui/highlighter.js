@@ -328,4 +328,11 @@ class Highlighter {
   }
 }
 
-export default Highlighter;
+// Create and export singleton instance
+const highlighter = new Highlighter();
+export default highlighter;
+
+// Make highlighter available globally for content scripts
+if (typeof window !== 'undefined') {
+  window.Highlighter = highlighter;
+}

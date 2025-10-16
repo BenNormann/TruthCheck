@@ -310,4 +310,11 @@ Return only valid JSON array:`;
   }
 }
 
-export default ClaimExtractor;
+// Create and export singleton instance
+const claimExtractor = new ClaimExtractor();
+export default claimExtractor;
+
+// Make claimExtractor available globally for content scripts
+if (typeof window !== 'undefined') {
+  window.ClaimExtractor = claimExtractor;
+}

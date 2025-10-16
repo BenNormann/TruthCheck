@@ -273,4 +273,11 @@ class AIClient {
   }
 }
 
-export default AIClient;
+// Create and export singleton instance
+const aiClient = new AIClient();
+export default aiClient;
+
+// Make aiClient available globally for content scripts
+if (typeof window !== 'undefined') {
+  window.AIClient = aiClient;
+}

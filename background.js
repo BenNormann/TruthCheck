@@ -1,8 +1,8 @@
 // Background script for Truth Check extension
 console.log('Truth Check extension background script loaded');
 
-// Simplified CONFIG for service worker compatibility
-const CONFIG = {
+// Default configuration - will be overridden by stored config
+let CONFIG = {
   extension_name: "Truth Check",
   extension_version: "1.0.0",
   debug_mode: true,
@@ -24,6 +24,24 @@ const CONFIG = {
     }
   }
 };
+
+// Load configuration from storage
+async function loadConfig() {
+  try {
+    const stored = await chrome.storage.sync.get('config');
+    if (stored.config) {
+      CONFIG = { ...CONFIG, ...stored.config };
+      console.log('Loaded configuration from storage');
+    } else {
+      // Save default config to storage
+      await chrome.storage.sync.set({ config: CONFIG });
+      console.log('Saved default configuration to storage');
+    }
+  } catch (error) {
+    console.error('Error loading config:', error);
+  }
+  return CONFIG;
+}
 
 // Handle extension installation
 chrome.runtime.onInstalled.addListener((details) => {

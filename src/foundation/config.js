@@ -308,3 +308,8 @@ Return ONLY valid JSON:
 
 // Export for use in other modules
 export default CONFIG;
+
+// Make CONFIG available globally for content scripts
+if (typeof window !== 'undefined') {
+  window.CONFIG = CONFIG;
+}

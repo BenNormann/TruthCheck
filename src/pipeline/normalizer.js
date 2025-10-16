@@ -272,4 +272,11 @@ class ClaimNormalizer {
   }
 }
 
-export default ClaimNormalizer;
+// Create and export singleton instance
+const claimNormalizer = new ClaimNormalizer();
+export default claimNormalizer;
+
+// Make claimNormalizer available globally for content scripts
+if (typeof window !== 'undefined') {
+  window.ClaimNormalizer = claimNormalizer;
+}

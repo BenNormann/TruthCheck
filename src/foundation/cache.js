@@ -260,3 +260,8 @@ setInterval(() => {
 }, 60 * 60 * 1000);
 
 export default cache;
+
+// Make cache available globally for content scripts
+if (typeof window !== 'undefined') {
+  window.Cache = cache;
+}
