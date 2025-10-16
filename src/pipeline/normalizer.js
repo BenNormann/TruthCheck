@@ -1,4 +1,5 @@
 // Claim Normalizer - Normalize claims for better search queries and entity extraction
+import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 import cache from '../foundation/cache.js';
 import AIClient from '../routers/ai.js';

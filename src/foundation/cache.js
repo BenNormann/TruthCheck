@@ -1,4 +1,6 @@
 // Cache - IndexedDB wrapper with TTL management for Truth Check extension
+import CONFIG from './config.js';
+
 class Cache {
   constructor() {
     this.dbName = 'TruthCheckCache';

@@ -1,4 +1,5 @@
 // Credibility Router - Check source credibility and domain reputation
+import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 import cache from '../foundation/cache.js';
 

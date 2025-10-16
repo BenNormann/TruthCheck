@@ -1,4 +1,5 @@
 // Tooltip System - Show detailed claim information on hover
+import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 
 class Tooltip {

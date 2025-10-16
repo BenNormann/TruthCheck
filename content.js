@@ -16,22 +16,22 @@ async function initializeExtension() {
 
     // Initialize foundation layer
     console.log('Truth Check: Initializing foundation layer...');
-    Cache = await import('./src/foundation/cache.js');
-    Logger = await import('./src/foundation/logger.js');
+    Cache = await import(chrome.runtime.getURL('src/foundation/cache.js'));
+    Logger = await import(chrome.runtime.getURL('src/foundation/logger.js'));
     console.log('Truth Check: Foundation layer initialized');
 
     // Initialize pipeline layer
     console.log('Truth Check: Initializing pipeline layer...');
-    ClaimExtractor = await import('./src/pipeline/claimExtractor.js');
-    ClaimNormalizer = await import('./src/pipeline/normalizer.js');
-    Scorer = await import('./src/pipeline/scorer.js');
-    OverrideEngine = await import('./src/pipeline/overrideEngine.js');
+    ClaimExtractor = await import(chrome.runtime.getURL('src/pipeline/claimExtractor.js'));
+    ClaimNormalizer = await import(chrome.runtime.getURL('src/pipeline/normalizer.js'));
+    Scorer = await import(chrome.runtime.getURL('src/pipeline/scorer.js'));
+    OverrideEngine = await import(chrome.runtime.getURL('src/pipeline/overrideEngine.js'));
     console.log('Truth Check: Pipeline layer initialized');
 
     // Initialize UI layer
     console.log('Truth Check: Initializing UI layer...');
-    Highlighter = await import('./src/ui/highlighter.js');
-    Tooltip = await import('./src/ui/tooltip.js');
+    Highlighter = await import(chrome.runtime.getURL('src/ui/highlighter.js'));
+    Tooltip = await import(chrome.runtime.getURL('src/ui/tooltip.js'));
     console.log('Truth Check: UI layer initialized');
 
     console.log('Truth Check: Extension initialized successfully');
@@ -248,6 +248,34 @@ function renderClaimHighlight(result) {
     Highlighter.highlightText(pos.node, pos.startIndex, pos.endIndex, color, result);
   });
 }
+
+// Message listener for communication with popup
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('Content script received message:', message);
+
+  if (message.type === 'GET_STATUS') {
+    // Return status information to popup
+    sendResponse({
+      ready: true,
+      claimsAnalyzed: 0, // This would be populated from actual processing
+      stats: { total: 0, high: 0, medium: 0, low: 0 }
+    });
+  }
+
+  if (message.type === 'TOGGLE_HIGHLIGHTING') {
+    // Handle highlighting toggle from popup
+    console.log('Toggling highlighting:', message.enabled);
+    sendResponse({ success: true });
+  }
+
+  if (message.type === 'TOGGLE_CONFIDENCE_FILTER') {
+    // Handle confidence filter toggle from popup
+    console.log('Toggling confidence filter:', message.enabled);
+    sendResponse({ success: true });
+  }
+
+  return true; // Keep message channel open for async response
+});
 
 // Initialize when DOM is ready
 console.log('Truth Check: Setting up initialization...');

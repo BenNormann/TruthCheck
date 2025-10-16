@@ -1,4 +1,5 @@
 // Scholar Router - Query academic sources (Scholar, PubMed, Britannica, arXiv)
+import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 import cache from '../foundation/cache.js';
 

@@ -1,4 +1,5 @@
 // Scorer - Combine scores from all sources with weighted averaging
+import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 import cache from '../foundation/cache.js';
 import FactCheckerRouter from '../routers/factcheckers.js';

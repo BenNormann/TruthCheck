@@ -1,4 +1,5 @@
 // Fact-Checker Router - Query multiple fact-checking sources in priority order
+import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 import cache from '../foundation/cache.js';
 

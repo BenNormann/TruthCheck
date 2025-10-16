@@ -1,4 +1,5 @@
 // Override Engine - Check for exact matches on authoritative sources
+import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 import cache from '../foundation/cache.js';
 import AIClient from '../routers/ai.js';

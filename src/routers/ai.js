@@ -1,4 +1,5 @@
 // AI Client - OpenAI/Anthropic API wrapper with retry logic and rate limiting
+import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 import cache from '../foundation/cache.js';
 

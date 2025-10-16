@@ -1,4 +1,5 @@
 // Claim Extractor - Extract factual claims from text using heuristic and AI methods
+import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 import cache from '../foundation/cache.js';
 import AIClient from '../routers/ai.js';

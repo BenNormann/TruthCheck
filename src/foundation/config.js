@@ -171,7 +171,7 @@ Return ONLY valid JSON:
         enabled: true,
         url: "https://toolbox.google.com/factcheck/api/",
         priority: 1,
-        api_key: process.env.GOOGLE_FACT_CHECK_API_KEY,
+        api_key: null, // Configure API key in extension settings
         timeout: 5000,
         retries: 2
       },
@@ -236,7 +236,7 @@ Return ONLY valid JSON:
       {
         name: "NewsGuard",
         enabled: true,
-        api_key: process.env.NEWSGUARD_API_KEY,
+        api_key: null, // Configure API key in extension settings
         timeout: 3000,
         retries: 2
       },
@@ -257,7 +257,7 @@ Return ONLY valid JSON:
       max_tokens: 1000,
       timeout: 15000,
       retries: 3,
-      api_key: process.env.OPENAI_API_KEY,
+      api_key: null, // Configure API key in extension settings
       base_url: "https://api.openai.com/v1"
     }
   },

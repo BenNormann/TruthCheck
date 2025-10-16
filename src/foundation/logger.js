@@ -1,4 +1,6 @@
 // Logger - Centralized logging and error handling for Truth Check extension
+import CONFIG from './config.js';
+
 class Logger {
   constructor() {
     this.logs = [];

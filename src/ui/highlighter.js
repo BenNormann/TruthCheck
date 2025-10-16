@@ -1,4 +1,5 @@
 // Highlighter - Highlight claims on web pages with colors and metadata
+import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 
 class Highlighter {
