@@ -1,0 +1,37 @@
+{
+  "name": "truth-check-misinformation-detector",
+  "version": "1.0.0",
+  "description": "Browser extension that identifies misinformation by scoring claims on news sites",
+  "main": "background.js",
+  "scripts": {
+    "build": "echo 'No build process needed for browser extension'",
+    "test": "echo 'Tests would go here'",
+    "lint": "echo 'Linting would go here'",
+    "dev": "echo 'Development mode - load extension in browser'",
+    "package": "echo 'Packaging extension for distribution'"
+  },
+  "keywords": [
+    "browser-extension",
+    "fact-checking",
+    "misinformation",
+    "chrome-extension",
+    "firefox-addon"
+  ],
+  "author": "Truth Check Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/truth-check/misinformation-detector"
+  },
+  "bugs": {
+    "url": "https://github.com/truth-check/misinformation-detector/issues"
+  },
+  "homepage": "https://github.com/truth-check/misinformation-detector#readme",
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "prettier": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
