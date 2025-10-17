@@ -9,7 +9,7 @@ const CONFIG = {
 
   // Claim extraction settings
   claim_extraction: {
-    method: "hybrid", // "heuristic" | "ai" | "hybrid"
+    method: "hybrid", // "heuristic" | "ai" | "hybrid" - using Express server with OpenAI
     heuristic_threshold: 0.6,
     
     // Factual verb patterns (case-insensitive) - indicate objective statements
@@ -35,16 +35,23 @@ const CONFIG = {
       "generated", "generates", "created", "creates",
       "killed", "kills", "infected", "infects",
       "prevented", "prevents", "treated", "treats",
+      "concluded", "proven", "measured", "calculated", 
+      "estimated", "projected", "rose", "fell", "grew", 
+      "declined", "surged", "plummeted", "wants", "would", 
+      "will", "commemorate", "commemorates", "unveiled", 
+      "displayed", "built", "construct", "constructed",
+      "opened", "gave", "approved", "need", "needs", "requires",
+      "takes", "took", "appears", "allows", "prohibits",
       // Legal/news verbs
       "indicted", "charged", "convicted", "sentenced", "arrested",
       "sued", "pleaded", "testified", "alleged", "accused",
       "appointed", "elected", "resigned", "retired", "fired",
       "hired", "promoted", "demoted", "died", "passed",
-      "signed", "vetoed", "approved", "rejected", "denied",
+      "signed", "vetoed", "rejected", "denied",
       "used", "sent", "received", "emailed", "wrote", "described",
       // Investigation/contradiction verbs
-      "investigating", "investigated", "confirming", "denied", "refuted",
-      "contradicted", "disputed", "challenged", "verified", "debunked",
+      "investigating", "investigated", "confirming", "refuted",
+      "contradicted", "disputed", "challenged", "debunked",
       "witnessed", "observed", "documented", "recorded", "captured",
       "urged", "warned", "emphasized", "directed", "ordered"
     ],
@@ -57,11 +64,18 @@ const CONFIG = {
       "analysis shows", "experts say", "research found",
       "scientists have found", "data shows", "study found",
       "evidence suggests", "reports indicate", "findings reveal",
-      "statistics show", "numbers indicate", "figures suggest",
+      "numbers indicate", "figures suggest",
       "survey found", "poll shows", "census data",
       "clinical trial", "peer-reviewed", "meta-analysis",
       "researchers discovered", "investigation found",
       "official data", "government report",
+      "the study", "the research", "the report", "the analysis",
+      "results indicate", "survey reveals", "study reveals",
+      "research shows", "figures show",
+      "the latest", "recent study", "new research", "latest findings",
+      "reportedly", "is reportedly", "are reportedly", "was reportedly",
+      "congress gave", "congress approved", "federal law", "typically",
+      "most notably", "in a report",
       // Legal/news markers
       "the indictment", "prosecutors say", "court documents",
       "grand jury", "the complaint", "officials said",
@@ -109,16 +123,15 @@ const CONFIG = {
     // Exclusion patterns (regex) - sentences matching these likely not claims
     exclude_patterns: [
       "\\?$",                                    // Ends with question mark
-      "^(and|or|but)\\s",                       // Starts with conjunction alone (removed article check - too strict)
+      "^(and|or|but)\\s",                       // Starts with conjunction alone                                                                                                 
       "^(i think|i believe|arguably)",          // Starts with opinion marker
       "^(click here|subscribe|follow|share)",    // Call-to-action
       "^(warning|disclaimer|note:)"              // Meta-content
-      // Removed: should/must check - too aggressive, filters valid claims
     ],
     
     // Claim length constraints
-    min_claim_length: 20,
-    max_claim_length: 250,
+    min_claim_length: 15,
+    max_claim_length: 300,
     
     // Claim confidence threshold - minimum score to classify as claim
     claim_confidence_threshold: 0.25,
@@ -251,32 +264,6 @@ Return ONLY valid JSON:
   "override_valid": true|false,
   "confidence": 0-1,
   "reasoning": "one sentence"
-}`,
-
-    ai_claim_assessment: `Analyze this factual claim for credibility and assign a trustworthiness score.
-
-CLAIM: "{claim}"
-CLAIM_TYPE: "{claim_type}"
-
-Evaluate based on:
-1. PLAUSIBILITY: Is the claim scientifically, medically, or logically sound?
-2. EVIDENCE STRENGTH: What type of evidence would be needed to support this claim?
-3. CONTEXT: Does this claim align with established knowledge in the field?
-4. LANGUAGE: Does the claim use sensational, absolute, or manipulative language?
-5. SOURCES: What kind of sources typically make such claims?
-
-Consider:
-- Extraordinary claims require extraordinary evidence
-- Sensational language often indicates lower credibility
-- Absolute statements (always, never, everyone) are rarely true
-- Recent, peer-reviewed sources carry more weight than anecdotal evidence
-
-Return ONLY valid JSON:
-{
-  "overall_score": 0-10,
-  "confidence": "high|medium|low",
-  "assessment": "one paragraph explaining the reasoning",
-  "reasoning": "key factors that influenced the score"
 }`
   },
 
@@ -304,7 +291,7 @@ Return ONLY valid JSON:
       },
       {
         name: "FactCheck.org",
-        enabled: true,
+        enabled: true,  
         url: "https://factcheck.org/api/",
         priority: 3,
         timeout: 6000,
@@ -376,7 +363,7 @@ Return ONLY valid JSON:
       max_tokens: 1000,
       timeout: 15000,
       retries: 3,
-      api_key: null, // Configure API key in extension settings
+      api_key: null, // API key is now handled by Express server
       base_url: "https://api.openai.com/v1"
     }
   },

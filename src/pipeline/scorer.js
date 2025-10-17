@@ -14,24 +14,31 @@ class Scorer {
     this._aiClient = null;
 
     this.weights = {
-      ai: CONFIG.scoring.ai.weight,
-      source_credibility: CONFIG.scoring.source_credibility.weight,
-      scholarly: CONFIG.scoring.scholarly.weight
+      ai: CONFIG.scoring.ai?.weight || 0.40,
+      source_credibility: CONFIG.scoring.source_credibility?.weight || 0.30,
+      scholarly: CONFIG.scoring.scholarly?.weight || 0.30
     };
 
     this.enabled = {
-      ai: CONFIG.scoring.ai.enabled,
-      source_credibility: CONFIG.scoring.source_credibility.enabled,
-      scholarly: CONFIG.scoring.scholarly.enabled
+      ai: CONFIG.scoring.ai?.enabled !== false,
+      source_credibility: CONFIG.scoring.source_credibility?.enabled !== false,
+      scholarly: CONFIG.scoring.scholarly?.enabled !== false
     };
   }
 
   getAIClient() {
     if (!this._aiClient) {
-      // Lazy initialization - use global AIClient or fallback to require
-      this._aiClient = (typeof window !== 'undefined' && window.AIClient)
-        ? new window.AIClient()
-        : new (require('../routers/ai.js').AIClient)();
+      // Lazy initialization - use global aiServerClient instance if available
+      if (typeof window !== 'undefined' && window.aiServerClient) {
+        console.log('[SCORER] Using global aiServerClient instance');
+        this._aiClient = window.aiServerClient;
+      } else if (typeof window !== 'undefined' && window.aiClient) {
+        console.log('[SCORER] Fallback to global aiClient instance');
+        this._aiClient = window.aiClient;
+      } else {
+        console.error('[SCORER] ❌ AIClient not available in window object');
+        throw new Error('AIClient not loaded. Make sure ai-server.js is imported in content.js');
+      }
     }
     return this._aiClient;
   }
@@ -43,26 +50,37 @@ class Scorer {
     const cached = await cache.get(cacheKey);
 
     if (cached) {
+      console.log('[SCORER] Using cached scores for:', normalizedClaim.original_claim.substring(0, 50) + '...');
       logger.debug('Using cached scores');
       return cached;
     }
 
+    console.log('[SCORER] No cached scores found, running fresh scoring for:', normalizedClaim.original_claim.substring(0, 50) + '...');
+    console.log('[SCORER] Enabled scoring methods:', {
+      ai: this.enabled.ai,
+      source_credibility: this.enabled.source_credibility,
+      scholarly: this.enabled.scholarly
+    });
+
     const scores = {};
     const promises = [];
 
-    // Score from AI analysis (parallel)
-    if (this.enabled.ai) {
-      promises.push(this.scoreFromAI(normalizedClaim, scores));
-    }
-
     // Score from source credibility (parallel)
     if (this.enabled.source_credibility) {
+      console.log('[SCORER] Adding source credibility scoring');
       promises.push(this.scoreFromCredibility(normalizedClaim, scores));
     }
 
-    // Score from scholarly sources (parallel)
+    // Score from scholarly sources with AI assessment (parallel)
     if (this.enabled.scholarly) {
+      console.log('[SCORER] Adding scholarly scoring (using OpenAI via API server)');
       promises.push(this.scoreFromScholarly(normalizedClaim, scores));
+    }
+
+    // Score from AI assessment (parallel)
+    if (this.enabled.ai) {
+      console.log('[SCORER] Adding AI-based scoring');
+      promises.push(this.scoreFromAI(normalizedClaim, scores));
     }
 
     // Execute all scoring in parallel
@@ -84,19 +102,31 @@ class Scorer {
 
   async scoreFromAI(normalizedClaim, scores) {
     try {
-      logger.debug('Scoring from AI analysis');
+      logger.debug('Scoring from AI assessment');
+      
+      const aiClient = this.getAIClient();
+      
+      // Get scholarly search results for evidence
+      const searchResults = await this.scholar.searchClaim(
+        normalizedClaim.original_claim,
+        normalizedClaim.claim_type
+      );
 
-      // Use AI to analyze the claim credibility
-      const aiAssessment = await this.assessClaimWithAI(normalizedClaim);
+      console.log('[AI SCORING] Search results found:', searchResults.length);
+
+      // Use AI to assess evidence from all sources (this is the main AI scoring)
+      const assessment = await this.assessScholarlyEvidence(normalizedClaim, searchResults);
 
       scores.ai = {
-        score: aiAssessment.overall_score,
-        confidence: aiAssessment.confidence,
-        assessment: aiAssessment.assessment,
-        reasoning: aiAssessment.reasoning
+        score: assessment.overall_score,
+        confidence: assessment.confidence,
+        assessment: assessment.assessment,
+        findings: assessment.findings
       };
+
     } catch (error) {
       logger.error('AI scoring failed:', error);
+      console.error('[AI SCORING] Error:', error);
       scores.ai = {
         score: 5,
         confidence: 'low',
@@ -140,28 +170,23 @@ class Scorer {
         normalizedClaim.claim_type
       );
 
-      if (searchResults.length === 0) {
-        scores.scholarly = {
-          score: 5,
-          confidence: 'low',
-          explanation: 'No scholarly sources found'
-        };
-        return;
-      }
+      console.log('[SCHOLARLY] Search results found:', searchResults.length);
 
-      // Use AI to assess evidence from search results
-      const assessment = await this.assessScholarlyEvidence(normalizedClaim, searchResults);
+      // Simple scoring based on whether we found scholarly sources
+      // Don't use AI here - that's for the AI component
+      const scholarScore = this.scoreScholarlyResults(searchResults);
 
       scores.scholarly = {
-        score: assessment.overall_score,
-        confidence: assessment.confidence,
-        assessment: assessment.assessment,
+        score: scholarScore.score,
+        confidence: scholarScore.confidence,
         sources: searchResults.slice(0, 3), // Top 3 sources
-        findings: assessment.findings
+        search_results_count: searchResults.length,
+        assessment: scholarScore.assessment
       };
 
     } catch (error) {
       logger.error('Scholarly scoring failed:', error);
+      console.error('[SCHOLARLY] Error:', error);
       scores.scholarly = {
         score: 5,
         confidence: 'low',
@@ -170,121 +195,132 @@ class Scorer {
     }
   }
 
-  async assessClaimWithAI(normalizedClaim) {
-    const prompt = CONFIG.prompts.ai_claim_assessment
-      .replace('{claim}', normalizedClaim.original_claim)
-      .replace('{claim_type}', normalizedClaim.claim_type || 'general');
-
-    try {
-      const response = await this.getAIClient().query(prompt, {
-        temperature: 0.2,
-        max_tokens: 1000
-      });
-
-      // Handle different response formats from AI client
-      if (typeof response === 'object' && response !== null) {
-        if (response.content) {
-          return response.content;
-        }
-        if (response.raw_response) {
-          return JSON.parse(response.raw_response);
-        }
-        // If it's already a parsed object, return it
-        return response;
-      }
-
-      // If it's a string, try to parse as JSON
-      if (typeof response === 'string') {
-        return JSON.parse(response);
-      }
-
-    } catch (error) {
-      logger.error('AI claim assessment failed:', error);
+  scoreScholarlyResults(searchResults) {
+    if (searchResults.length === 0) {
+      return {
+        score: 5,
+        confidence: 'low',
+        assessment: 'No scholarly sources found'
+      };
     }
 
-    // Fallback assessment based on claim characteristics
-    return this.fallbackAIAssessment(normalizedClaim);
-  }
-
-  fallbackAIAssessment(normalizedClaim) {
-    // Simple heuristic-based assessment
-    const claim = normalizedClaim.original_claim.toLowerCase();
-
-    let score = 5; // Neutral baseline
-    let confidence = 'medium';
-    let reasoning = 'Basic heuristic analysis';
-
-    // Check for sensational language
-    if (claim.includes('shocking') || claim.includes('amazing') || claim.includes('unbelievable')) {
-      score -= 2;
-      reasoning = 'Sensational language suggests potential misinformation';
-    }
-
-    // Check for extraordinary claims
-    if (claim.includes('cure') || claim.includes('miracle') || claim.includes('revolutionary')) {
-      score -= 1;
-      reasoning = 'Extraordinary claims require substantial evidence';
-    }
-
-    // Check for hedging language (suggests uncertainty)
-    if (claim.includes('may') || claim.includes('might') || claim.includes('could')) {
-      confidence = 'low';
-      reasoning = 'Hedging language indicates uncertainty';
+    // Score based on number and quality of results
+    let score = 5; // Start neutral
+    
+    if (searchResults.length >= 5) {
+      score = 8; // Good number of sources
+    } else if (searchResults.length >= 3) {
+      score = 7;
+    } else if (searchResults.length >= 1) {
+      score = 6;
     }
 
     return {
-      overall_score: Math.max(1, Math.min(10, score)),
-      confidence: confidence,
-      assessment: reasoning,
-      reasoning: reasoning
+      score: score,
+      confidence: searchResults.length >= 3 ? 'high' : 'medium',
+      assessment: `Found ${searchResults.length} scholarly source${searchResults.length > 1 ? 's' : ''}`
     };
   }
 
-  async assessScholarlyEvidence(normalizedClaim, searchResults) {
-    const resultsJson = JSON.stringify(searchResults.slice(0, 10)); // Limit to top 10
 
-    const prompt = CONFIG.prompts.evidence_assessment
-      .replace('{claim}', normalizedClaim.original_claim)
-      .replace('{search_results_json}', resultsJson);
+  async assessScholarlyEvidence(normalizedClaim, searchResults) {
+    console.log('[SCORING] Claim:', normalizedClaim.original_claim);
+    console.log('[SCORING] Search results from extension:', searchResults.length);
 
     try {
-      const response = await this.getAIClient().query(prompt, {
-        temperature: 0.2,
-        max_tokens: 1500
-      });
-
-      // Handle different response formats from AI client
-      if (typeof response === 'object' && response !== null) {
-        if (response.content) {
-          return response.content;
+      const aiClient = this.getAIClient();
+      
+      // First, try to get additional evidence from API server
+      let allEvidence = [...searchResults];
+      if (aiClient && typeof aiClient.searchEvidence === 'function') {
+        console.log('[SCORING] Searching for additional evidence via API server...');
+        try {
+          const serverEvidence = await aiClient.searchEvidence(normalizedClaim.original_claim);
+          if (serverEvidence && serverEvidence.length > 0) {
+            console.log(`[SCORING] ✅ API server found ${serverEvidence.length} additional evidence items`);
+            allEvidence = [...searchResults, ...serverEvidence];
+          } else {
+            console.log('[SCORING] API server found no additional evidence');
+          }
+        } catch (evidenceError) {
+          console.warn('[SCORING] API evidence search failed, continuing with extension results:', evidenceError.message);
         }
-        if (response.raw_response) {
-          return JSON.parse(response.raw_response);
-        }
-        // If it's already a parsed object, return it
-        return response;
       }
 
-      // If it's a string, try to parse as JSON
-      if (typeof response === 'string') {
-        return JSON.parse(response);
+      console.log('[SCORING] Total evidence items:', allEvidence.length);
+
+      // Handle case when no search results are available
+      const resultsJson = allEvidence.length > 0 
+        ? JSON.stringify(allEvidence.slice(0, 10)) 
+        : '[]';
+
+      const prompt = CONFIG.prompts.evidence_assessment
+        .replace('{claim}', normalizedClaim.original_claim)
+        .replace('{search_results_json}', resultsJson);
+
+      // Use API server's scoreEvidence method if available
+      if (aiClient && typeof aiClient.scoreEvidence === 'function') {
+        console.log('[SCORING] Using API server scoreEvidence method');
+        const assessment = await aiClient.scoreEvidence(normalizedClaim.original_claim, allEvidence);
+        
+        console.log('[SCORING] ✅ OpenAI score:', assessment.overall_score, '/10');
+        console.log('[SCORING] Confidence:', assessment.confidence);
+        console.log('[SCORING] Assessment:', assessment.assessment);
+        
+        return assessment;
+      } else {
+        // Fallback to direct query method
+        console.log('[SCORING] Using fallback query method');
+        const response = await aiClient.query(prompt, {
+          temperature: 0.2,
+          max_tokens: 1500
+        });
+
+        console.log('[SCORING] Raw AI response:', response);
+
+        // Handle different response formats from AI client
+        let assessment = null;
+        if (typeof response === 'object' && response !== null) {
+          if (response.content) {
+            assessment = response.content;
+          } else if (response.raw_response) {
+            assessment = JSON.parse(response.raw_response);
+          } else {
+            assessment = response;
+          }
+        } else if (typeof response === 'string') {
+          assessment = JSON.parse(response);
+        }
+
+        if (assessment && assessment.overall_score !== undefined) {
+          console.log('[SCORING] ✅ AI score:', assessment.overall_score, '/10');
+          console.log('[SCORING] Confidence:', assessment.confidence);
+          console.log('[SCORING] Assessment:', assessment.assessment);
+          return assessment;
+        } else {
+          console.log('[SCORING] ❌ Invalid response format:', assessment);
+        }
       }
 
     } catch (error) {
       logger.error('Scholarly evidence assessment failed:', error);
+      console.error('[SCORING] ❌ Error:', error);
     }
 
     // Fallback assessment based on result relevance
-    return this.fallbackEvidenceAssessment(searchResults);
+    console.log('[SCORING] Using fallback assessment');
+    return this.fallbackEvidenceAssessment(normalizedClaim, searchResults);
   }
 
-  fallbackEvidenceAssessment(searchResults) {
+  fallbackEvidenceAssessment(normalizedClaim, searchResults) {
     let totalScore = 0;
     let validResults = 0;
+    const similarities = [];
 
     for (const result of searchResults.slice(0, 5)) {
       // Simple relevance scoring based on title similarity
-      const similarity = this.calculateTextSimilarity(normalizedClaim.original_claim, result.title);
+      const similarity = this.calculateTextSimilarity(normalizedClaim.original_claim, result.title || '');
+      similarities.push({ result, similarity });
 
       if (similarity > 0.3) {
         // Assume recent results are more relevant
@@ -302,8 +338,8 @@ class Scorer {
       overall_score: Math.round(averageScore),
       confidence: validResults > 2 ? 'high' : 'medium',
       assessment: `Found ${validResults} relevant scholarly sources`,
-      findings: searchResults.slice(0, 3).map(result => ({
-        source_title: result.title,
+      findings: similarities.slice(0, 3).map(({ result, similarity }) => ({
+        source_title: result.title || 'Unknown',
         support_level: 'neutral',
         score: Math.round(similarity * 10),
         recency_concern: result.year && result.year < 2010 ? 'outdated' : 'recent'
@@ -353,43 +389,6 @@ class Scorer {
   }
 
   // Utility methods
-  getArticleText() {
-    // Get the full article text from the current page
-    const articleSelectors = [
-      'article',
-      '[class*="article"]',
-      '[class*="content"]',
-      'main',
-      '.post-content',
-      '.entry-content'
-    ];
-
-    for (const selector of articleSelectors) {
-      const element = document.querySelector(selector);
-      if (element) {
-        const cloned = element.cloneNode(true);
-        cloned.querySelectorAll('script, style, nav, header, footer, aside, .advertisement, .ads').forEach(el => el.remove());
-        return cloned.textContent || cloned.innerText || '';
-      }
-    }
-
-    return document.body.textContent || '';
-  }
-
-  extractRelevantExcerpt(articleText, claim) {
-    // Find the claim in the article and extract surrounding context
-    const claimIndex = articleText.toLowerCase().indexOf(claim.toLowerCase());
-
-    if (claimIndex === -1) {
-      return articleText.substring(0, 1000);
-    }
-
-    const start = Math.max(0, claimIndex - 500);
-    const end = Math.min(articleText.length, claimIndex + claim.length + 500);
-
-    return articleText.substring(start, end);
-  }
-
   calculateTextSimilarity(text1, text2) {
     const words1 = new Set(text1.toLowerCase().split(/\s+/));
     const words2 = new Set(text2.toLowerCase().split(/\s+/));

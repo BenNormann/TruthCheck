@@ -120,6 +120,7 @@ async function loadPipelineModules() {
   try {
     // Load modules using dynamic imports (content script context)
     const modules = await Promise.all([
+      import(chrome.runtime.getURL('src/routers/ai-server.js')),
       import(chrome.runtime.getURL('src/pipeline/claimExtractor.js')),
       import(chrome.runtime.getURL('src/pipeline/normalizer.js')),
       import(chrome.runtime.getURL('src/pipeline/scorer.js')),
@@ -128,12 +129,15 @@ async function loadPipelineModules() {
       import(chrome.runtime.getURL('src/ui/tooltip.js'))
     ]);
 
-    claimExtractor = modules[0].default;
-    claimNormalizer = modules[1].default;
-    scorer = modules[2].default;
-    overrideEngine = modules[3].default;
-    highlighter = modules[4].default;
-    tooltip = modules[5].default;
+    // AI server client is already made global by ai-server.js module
+    console.log('Truth Check: AI server client loaded:', !!window.aiServerClient);
+    
+    claimExtractor = modules[1].default;
+    claimNormalizer = modules[2].default;
+    scorer = modules[3].default;
+    overrideEngine = modules[4].default;
+    highlighter = modules[5].default;
+    tooltip = modules[6].default;
 
     console.log('Truth Check: Pipeline modules loaded successfully');
   } catch (error) {
@@ -143,9 +147,11 @@ async function loadPipelineModules() {
 }
 
 async function checkApiKeys() {
-  // Check if essential API keys are configured
+  // Check if essential services are available
+  // AI can be available via Express server even without direct API key
   const keys = {
-    ai: CONFIG.apis?.ai_provider?.api_key && CONFIG.apis.ai_provider.api_key !== 'null',
+    ai: (CONFIG.apis?.ai_provider?.api_key && CONFIG.apis.ai_provider.api_key !== 'null') || 
+        (typeof window !== 'undefined' && (window.aiServerClient || window.aiClient)),
     scholar: CONFIG.apis?.scholar_sources?.some(s => s.enabled),
     credibility: CONFIG.apis?.credibility_sources?.some(c => c.enabled && c.api_key)
   };
@@ -153,7 +159,7 @@ async function checkApiKeys() {
   const hasAnyKeys = Object.values(keys).some(k => k);
 
   if (!hasAnyKeys) {
-    Logger.warn('No API keys configured - running with limited functionality');
+    Logger.warn('No API keys or services configured - running with limited functionality');
   }
 
   return keys;
@@ -214,22 +220,31 @@ async function startProcessing() {
     }
 
     console.log('Truth Check: Claims normalized successfully');
+    console.log('Truth Check: Normalized claims count:', normalizedClaims.length);
 
     // Score claims using real pipeline (with batching and timeouts)
     console.log('Truth Check: Scoring claims...');
 
     // Check if we have necessary API keys for enhanced features
     const hasApiKeys = await checkApiKeys();
+    console.log('Truth Check: API keys available:', hasApiKeys);
+    
     const batchSize = CONFIG.performance?.batch_size || 5;
     const scoredResults = [];
 
+    console.log('Truth Check: Processing', normalizedClaims.length, 'claims in batches of', batchSize);
+
     for (let i = 0; i < normalizedClaims.length; i += batchSize) {
       const batch = normalizedClaims.slice(i, i + batchSize);
+      console.log(`Truth Check: Processing batch ${Math.floor(i / batchSize) + 1} (${batch.length} claims)`);
 
       const batchPromises = batch.map(async (normalizedClaim) => {
         try {
+          console.log('[BATCH] Scoring claim:', normalizedClaim.original_claim.substring(0, 60) + '...');
+          
           // Score the claim - pipeline handles missing API keys gracefully
           const scores = await scorer.scoreClaim(normalizedClaim);
+          console.log('[BATCH] ✅ Scored claim, final score:', scores.final);
 
           // Check for overrides if enabled and API keys are available
           let override = null;
@@ -245,6 +260,7 @@ async function startProcessing() {
             finalScore: override?.score || scores.final
           };
         } catch (error) {
+          console.error('[BATCH] ❌ Error scoring claim:', error);
           Logger.error('Error scoring claim:', error);
           // Return neutral score on error
           return {
@@ -258,10 +274,12 @@ async function startProcessing() {
       });
 
       const batchResults = await Promise.allSettled(batchPromises);
-      scoredResults.push(...batchResults.map(r => r.status === 'fulfilled' ? r.value : null).filter(r => r !== null));
+      const validResults = batchResults.map(r => r.status === 'fulfilled' ? r.value : null).filter(r => r !== null);
+      console.log(`Truth Check: Batch completed, ${validResults.length} results`);
+      scoredResults.push(...validResults);
     }
 
-    console.log('Truth Check: Claims scored successfully');
+    console.log('Truth Check: All claims scored successfully, total:', scoredResults.length);
 
     // Highlight claims on page using real highlighter
     highlightClaimsWithPipeline(scoredResults);

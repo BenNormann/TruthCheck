@@ -359,7 +359,7 @@ class Tooltip {
     const CONFIG = getConfig();
     if (!CONFIG.display.show_breakdown) return '';
 
-    const componentOrder = ['ai', 'source_credibility', 'scholarly'];
+    const componentOrder = ['scholarly', 'source_credibility', 'ai'];
 
     return `
       <div class="truth-check-tooltip-breakdown">
