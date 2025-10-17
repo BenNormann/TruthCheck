@@ -27,22 +27,26 @@
   border-left: 3px solid #ef4444;
 }
 
+/* ============================================
+   TRUTH CHECK TOOLTIP SYSTEM STYLES
+   ============================================ */
+
+/* Main Tooltip Container */
 .truth-check-tooltip {
-  position: absolute;
+  position: fixed;
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 8px;
   padding: 16px;
-  max-width: 350px;
-  min-width: 280px;
+  width: 320px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  z-index: 10000;
+  z-index: 1000;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   opacity: 0;
   transform: translateY(5px);
-  transition: all 0.2s ease;
+  transition: all 0.15s ease-in-out;
   pointer-events: none;
 }
 
@@ -51,50 +55,42 @@
   transform: translateY(0);
 }
 
-.truth-check-tooltip::before {
-  content: '';
-  position: absolute;
-  top: -6px;
-  left: 20px;
-  width: 0;
-  height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 6px solid white;
-}
-
-.truth-check-tooltip::after {
-  content: '';
-  position: absolute;
-  top: -7px;
-  left: 19px;
-  width: 0;
-  height: 0;
-  border-left: 7px solid transparent;
-  border-right: 7px solid transparent;
-  border-bottom: 7px solid #e5e7eb;
-}
-
+/* Tooltip Header Section */
 .truth-check-tooltip-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
   margin-bottom: 12px;
-  padding-bottom: 8px;
+  padding-bottom: 12px;
   border-bottom: 1px solid #f3f4f6;
 }
 
-.truth-check-tooltip-score {
-  font-size: 18px;
-  font-weight: 700;
-  margin-right: 8px;
+.truth-check-tooltip-claim {
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
+  line-height: 1.4;
+  margin-bottom: 8px;
+  text-align: center;
+  width: 100%;
 }
 
-.truth-check-tooltip-confidence {
-  font-size: 12px;
-  padding: 2px 6px;
-  border-radius: 12px;
+.truth-check-tooltip-score {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.truth-check-tooltip-label {
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.025em;
+  text-align: center;
 }
 
 .truth-check-tooltip-confidence.high {
@@ -112,20 +108,66 @@
   color: #991b1b;
 }
 
+/* AI Opinion Section */
+.truth-check-tooltip-ai-opinion {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.truth-check-tooltip-ai-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.truth-check-tooltip-ai-icon {
+  margin-right: 6px;
+  font-size: 14px;
+}
+
+.truth-check-tooltip-ai-title {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.truth-check-tooltip-ai-score {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.truth-check-tooltip-ai-confidence {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-align: center;
+  margin-bottom: 8px;
+  display: inline-block;
+}
+
+.truth-check-tooltip-ai-analysis {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+  font-style: italic;
+}
+
+/* Score Breakdown Section */
 .truth-check-tooltip-breakdown {
   margin-bottom: 12px;
 }
 
-.truth-check-tooltip-breakdown-title {
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-
 .truth-check-tooltip-components {
   display: grid;
-  gap: 4px;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .truth-check-tooltip-component {
@@ -135,116 +177,428 @@
   padding: 4px 8px;
   background: #f9fafb;
   border-radius: 4px;
-  font-size: 12px;
 }
 
 .truth-check-tooltip-component-label {
-  color: #6b7280;
+  font-size: 12px;
   font-weight: 500;
+  color: #6b7280;
 }
 
 .truth-check-tooltip-component-value {
+  font-size: 12px;
   font-weight: 600;
   color: #374151;
 }
 
-.truth-check-tooltip-component.high .truth-check-tooltip-component-value {
+/* Component-specific colors */
+.truth-check-tooltip-component .truth-check-tooltip-component-value.high {
   color: #22c55e;
 }
 
-.truth-check-tooltip-component.medium .truth-check-tooltip-component-value {
+.truth-check-tooltip-component .truth-check-tooltip-component-value.medium {
   color: #eab308;
 }
 
-.truth-check-tooltip-component.low .truth-check-tooltip-component-value {
+.truth-check-tooltip-component .truth-check-tooltip-component-value.low {
   color: #ef4444;
 }
 
+.truth-check-tooltip-component .truth-check-tooltip-component-value.error {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.truth-check-tooltip-component .truth-check-tooltip-component-value.disabled {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Evidence Section */
 .truth-check-tooltip-evidence {
   margin-bottom: 12px;
 }
 
-.truth-check-tooltip-evidence-title {
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 6px;
-  font-size: 13px;
+.truth-check-tooltip-evidence-item {
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
 }
 
-.truth-check-tooltip-evidence-item {
-  font-size: 12px;
-  color: #6b7280;
-  margin-bottom: 4px;
+.truth-check-tooltip-evidence-item:last-child {
+  border-bottom: none;
+}
+
+.truth-check-tooltip-evidence-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.truth-check-tooltip-evidence-icon {
+  margin-right: 6px;
+  font-weight: bold;
+}
+
+.truth-check-tooltip-evidence-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
 }
 
 .truth-check-tooltip-evidence-source {
-  font-weight: 600;
-  color: #374151;
-  margin-right: 8px;
-  min-width: 80px;
-}
-
-.truth-check-tooltip-red-flags {
-  margin-bottom: 12px;
-}
-
-.truth-check-tooltip-red-flags-title {
-  font-weight: 600;
-  color: #dc2626;
-  margin-bottom: 6px;
-  font-size: 13px;
-}
-
-.truth-check-tooltip-red-flag {
-  font-size: 12px;
-  color: #7f1d1d;
-  margin-bottom: 3px;
-  padding: 3px 6px;
-  background: #fef2f2;
-  border-radius: 3px;
-  border-left: 2px solid #dc2626;
-}
-
-.truth-check-tooltip-footer {
-  padding-top: 8px;
-  border-top: 1px solid #f3f4f6;
-  font-size: 12px;
+  font-size: 11px;
   color: #6b7280;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.truth-check-tooltip-view-source {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: all 0.15s ease-in-out;
+}
+
+.truth-check-tooltip-view-source:hover {
+  background: rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+/* Footer */
+.truth-check-tooltip-footer {
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
   text-align: center;
 }
 
 .truth-check-tooltip-learn-more {
   color: #3b82f6;
   text-decoration: none;
+  font-size: 12px;
   font-weight: 500;
+  transition: color 0.15s ease-in-out;
 }
 
 .truth-check-tooltip-learn-more:hover {
+  color: #2563eb;
   text-decoration: underline;
 }
 
-/* Animation for smooth tooltip appearance */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* ============================================
+   BIBLIOGRAPHY MODAL STYLES
+   ============================================ */
+
+.truth-check-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1001;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
 }
 
-.truth-check-tooltip.show {
-  animation: fadeInUp 0.2s ease-out;
+.truth-check-modal-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
 }
 
-/* Responsive adjustments */
-@media (max-width: 400px) {
+.truth-check-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  z-index: 1002;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.9);
+  transition: all 0.2s ease;
+}
+
+.truth-check-modal.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.truth-check-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.truth-check-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.truth-check-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.15s ease-in-out;
+}
+
+.truth-check-modal-close:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.truth-check-modal-body {
+  line-height: 1.6;
+}
+
+.truth-check-modal-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.truth-check-modal-badge-corroborated,
+.truth-check-modal-badge-supported {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.truth-check-modal-badge-contradicted {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.truth-check-modal-badge-unverified {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.truth-check-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.truth-check-modal-meta {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.truth-check-modal-type,
+.truth-check-modal-date {
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.truth-check-modal-url {
+  margin-bottom: 16px;
+}
+
+.truth-check-modal-url a {
+  color: #3b82f6;
+  text-decoration: none;
+  font-size: 13px;
+  word-break: break-all;
+  transition: color 0.15s ease-in-out;
+}
+
+.truth-check-modal-url a:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.truth-check-modal-excerpt {
+  margin-bottom: 16px;
+}
+
+.truth-check-modal-excerpt h5 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.truth-check-modal-excerpt blockquote {
+  margin: 0;
+  padding: 12px;
+  background: #f9fafb;
+  border-left: 3px solid #e5e7eb;
+  border-radius: 4px;
+  font-style: italic;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.truth-check-modal-actions {
+  text-align: center;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.truth-check-modal-open {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: #3b82f6;
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s ease-in-out;
+}
+
+.truth-check-modal-open:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+/* Loading and Error States */
+.truth-check-modal-loading,
+.truth-check-modal-error {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.truth-check-modal-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f4f6;
+  border-top: 3px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.truth-check-modal-error p {
+  color: #ef4444;
+  margin-bottom: 16px;
+}
+
+.truth-check-modal-retry {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s ease-in-out;
+}
+
+.truth-check-modal-retry:hover {
+  background: #dc2626;
+}
+
+/* ============================================
+   RESPONSIVE DESIGN
+   ============================================ */
+
+@media (max-width: 480px) {
   .truth-check-tooltip {
-    max-width: 280px;
-    min-width: 250px;
+    width: 280px;
+    left: 10px !important;
+    right: 10px !important;
+    transform: translate(0, 5px);
+  }
+
+  .truth-check-tooltip.show {
+    transform: translate(0, 0);
+  }
+
+  .truth-check-tooltip-components {
+    grid-template-columns: 1fr;
+  }
+
+  .truth-check-modal {
+    width: 95%;
+    max-height: 90vh;
+    margin: 5vh auto;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    transform: none;
+  }
+
+  .truth-check-modal.show {
+    transform: none;
+  }
+}
+
+/* ============================================
+   ACCESSIBILITY
+   ============================================ */
+
+.truth-check-tooltip[role="tooltip"] {
+  pointer-events: auto;
+}
+
+.truth-check-tooltip-learn-more:focus,
+.truth-check-tooltip-view-source:focus,
+.truth-check-modal-close:focus,
+.truth-check-modal-open:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .truth-check-tooltip {
+    border: 2px solid #000;
+  }
+
+  .truth-check-tooltip-badge {
+    border: 1px solid currentColor;
+  }
+
+  .truth-check-modal {
+    border: 2px solid #000;
   }
 }

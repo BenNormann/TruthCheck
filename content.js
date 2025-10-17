@@ -326,12 +326,12 @@ function highlightClaimsWithPipeline(scoredResults) {
           highlightElement.addEventListener('mouseenter', (e) => {
             const highlightData = highlighter.getHighlightInfo(highlightId);
             if (highlightData) {
-              tooltip.show(highlightId, highlightData, e);
+              tooltip.showTooltip(highlightElement, highlightData);
             }
           });
 
           highlightElement.addEventListener('mouseleave', () => {
-            tooltip.hide();
+            tooltip.scheduleHide();
           });
         }
       });
@@ -380,7 +380,7 @@ function updatePopupStatusWithPipeline(scoredResults) {
   chrome.storage.local.set({ truthCheckStatus: status });
 }
 
-// Add CSS styles for highlights
+// Add CSS styles for highlights (tooltips are handled by styles.css)
 function addHighlightStyles() {
   if (document.getElementById('truth-check-styles')) return;
 
