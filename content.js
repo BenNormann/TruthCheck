@@ -41,6 +41,9 @@ const Cache = {
   }
 };
 
+// Pipeline modules (loaded dynamically)
+let claimExtractor, claimNormalizer, scorer, overrideEngine, highlighter, tooltip;
+
 // Simple utilities
 const Utils = {
   // Extract main article content
@@ -79,30 +82,6 @@ const Utils = {
     return newsDomains.some(domain => currentDomain.includes(domain)) ||
            document.querySelector('article') !== null ||
            document.querySelector('[class*="article"]') !== null;
-  },
-
-  // Simple claim extraction (basic implementation)
-  extractClaims: function(text) {
-    const claims = [];
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
-
-    for (const sentence of sentences) {
-      const trimmed = sentence.trim();
-      if (trimmed.length > 20 && trimmed.length < 200) {
-        claims.push(trimmed);
-      }
-    }
-
-    return claims.slice(0, 10); // Limit to 10 claims for performance
-  },
-
-  // Simple scoring (mock implementation)
-  scoreClaims: function(claims) {
-    return claims.map(claim => ({
-      claim,
-      score: Math.random() * 10, // Mock score
-      confidence: Math.random()
-    }));
   }
 };
 
@@ -113,6 +92,10 @@ async function initializeExtension() {
     // Load CONFIG from background script
     console.log('Truth Check: Loading configuration...');
     CONFIG = await getConfig();
+
+    // Load pipeline modules dynamically
+    console.log('Truth Check: Loading pipeline modules...');
+    await loadPipelineModules();
 
     console.log('Truth Check: Extension initialized successfully');
     startProcessing();
@@ -128,6 +111,50 @@ async function getConfig() {
       resolve(response || {});
     });
   });
+}
+
+async function loadPipelineModules() {
+  try {
+    // Load modules using dynamic imports (content script context)
+    const modules = await Promise.all([
+      import(chrome.runtime.getURL('src/pipeline/claimExtractor.js')),
+      import(chrome.runtime.getURL('src/pipeline/normalizer.js')),
+      import(chrome.runtime.getURL('src/pipeline/scorer.js')),
+      import(chrome.runtime.getURL('src/pipeline/overrideEngine.js')),
+      import(chrome.runtime.getURL('src/ui/highlighter.js')),
+      import(chrome.runtime.getURL('src/ui/tooltip.js'))
+    ]);
+
+    claimExtractor = modules[0].default;
+    claimNormalizer = modules[1].default;
+    scorer = modules[2].default;
+    overrideEngine = modules[3].default;
+    highlighter = modules[4].default;
+    tooltip = modules[5].default;
+
+    console.log('Truth Check: Pipeline modules loaded successfully');
+  } catch (error) {
+    console.error('Truth Check: Failed to load pipeline modules:', error);
+    throw error;
+  }
+}
+
+async function checkApiKeys() {
+  // Check if essential API keys are configured
+  const keys = {
+    ai: CONFIG.apis?.ai_provider?.api_key && CONFIG.apis.ai_provider.api_key !== 'null',
+    factChecker: CONFIG.apis?.fact_checkers?.some(fc => fc.enabled && fc.api_key),
+    scholar: CONFIG.apis?.scholar_sources?.some(s => s.enabled),
+    credibility: CONFIG.apis?.credibility_sources?.some(c => c.enabled && c.api_key)
+  };
+
+  const hasAnyKeys = Object.values(keys).some(k => k);
+
+  if (!hasAnyKeys) {
+    Logger.warn('No API keys configured - running with limited functionality');
+  }
+
+  return keys;
 }
 
 async function startProcessing() {
@@ -159,9 +186,10 @@ async function startProcessing() {
 
     console.log('Truth Check: Article content extracted successfully');
 
-    // Extract claims from article
+    // Extract claims from article using real pipeline
     console.log('Truth Check: Extracting claims from article...');
-    const claims = Utils.extractClaims(articleContent);
+    const claimResults = await claimExtractor.extractClaims(articleContent);
+    const claims = claimResults.map(c => c.text);
     console.log('Truth Check: Claims found:', claims.length);
 
     if (claims.length === 0) {
@@ -173,16 +201,71 @@ async function startProcessing() {
     console.log('Truth Check: Claims extracted successfully');
     console.log('Truth Check: Found', claims.length, 'claims to analyze');
 
-    // Score claims
+    // Normalize claims
+    console.log('Truth Check: Normalizing claims...');
+    const normalizedResults = await claimNormalizer.normalizeBatch(claims);
+    const normalizedClaims = normalizedResults.map(r => r.normalized).filter(n => n !== null);
+
+    if (normalizedClaims.length === 0) {
+      console.log('Truth Check: No valid claims after normalization');
+      return;
+    }
+
+    console.log('Truth Check: Claims normalized successfully');
+
+    // Score claims using real pipeline (with batching and timeouts)
     console.log('Truth Check: Scoring claims...');
-    const scoredClaims = Utils.scoreClaims(claims);
+
+    // Check if we have necessary API keys for enhanced features
+    const hasApiKeys = await checkApiKeys();
+    const batchSize = CONFIG.performance?.batch_size || 5;
+    const scoredResults = [];
+
+    for (let i = 0; i < normalizedClaims.length; i += batchSize) {
+      const batch = normalizedClaims.slice(i, i + batchSize);
+
+      const batchPromises = batch.map(async (normalizedClaim) => {
+        try {
+          // Score the claim - pipeline handles missing API keys gracefully
+          const scores = await scorer.scoreClaim(normalizedClaim);
+
+          // Check for overrides if enabled and API keys are available
+          let override = null;
+          if (CONFIG.features?.enable_override_engine && hasApiKeys.ai) {
+            override = await overrideEngine.checkOverride(normalizedClaim);
+          }
+
+          return {
+            claim: normalizedClaim.original_claim,
+            normalized: normalizedClaim,
+            scores,
+            override,
+            finalScore: override?.score || scores.final
+          };
+        } catch (error) {
+          Logger.error('Error scoring claim:', error);
+          // Return neutral score on error
+          return {
+            claim: normalizedClaim.original_claim,
+            normalized: normalizedClaim,
+            scores: { final: 5, confidence: 'low', components: {} },
+            override: null,
+            finalScore: 5
+          };
+        }
+      });
+
+      const batchResults = await Promise.allSettled(batchPromises);
+      scoredResults.push(...batchResults.map(r => r.status === 'fulfilled' ? r.value : null).filter(r => r !== null));
+    }
+
     console.log('Truth Check: Claims scored successfully');
 
-    // Highlight claims on page
-    highlightClaims(scoredClaims);
+    // Highlight claims on page using real highlighter
+    highlightClaimsWithPipeline(scoredResults);
 
     // Update popup status
-    updatePopupStatus(scoredClaims);
+    updatePopupStatusWithPipeline(scoredResults);
 
   } catch (error) {
     console.error('Truth Check: Error in main processing:', error);
@@ -190,14 +273,18 @@ async function startProcessing() {
   }
 }
 
-// Highlight claims on the page
-function highlightClaims(scoredClaims) {
+// Highlight claims on the page using real pipeline
+function highlightClaimsWithPipeline(scoredResults) {
   console.log('Truth Check: Highlighting claims on page...');
 
-  scoredClaims.forEach(item => {
-    const { claim, score } = item;
+  // Clear existing highlights
+  highlighter.removeAllHighlights();
 
-    // Find claim text in the DOM
+  // Create highlights for each scored claim
+  scoredResults.forEach(result => {
+    if (!result || !result.claim) return;
+
+    // Find all occurrences of the claim text in the DOM
     const walker = document.createTreeWalker(
       document.body,
       NodeFilter.SHOW_TEXT,
@@ -206,49 +293,64 @@ function highlightClaims(scoredClaims) {
     );
 
     let node;
+    const positions = [];
+
     while (node = walker.nextNode()) {
       const text = node.textContent;
-      const index = text.toLowerCase().indexOf(claim.toLowerCase());
+      const index = text.toLowerCase().indexOf(result.claim.toLowerCase());
 
       if (index !== -1 && text.length < 1000) {
-        // Create highlight span
-        const highlight = document.createElement('span');
-        highlight.className = `truth-check-highlight score-${getScoreClass(score)}`;
-        highlight.title = `Truth Score: ${score.toFixed(1)}/10`;
-
-        // Split text and insert highlight
-        const beforeText = text.substring(0, index);
-        const afterText = text.substring(index + claim.length);
-
-        if (beforeText) node.parentNode.insertBefore(document.createTextNode(beforeText), node);
-        node.parentNode.insertBefore(highlight, node);
-        highlight.appendChild(document.createTextNode(claim));
-        if (afterText) node.parentNode.insertBefore(document.createTextNode(afterText), node);
-
-        node.remove();
-        break; // Only highlight first occurrence
+        positions.push({
+          node,
+          startIndex: index,
+          endIndex: index + result.claim.length
+        });
       }
+    }
+
+    // Create highlight if positions found
+    if (positions.length > 0) {
+      const highlightIds = highlighter.highlightMultiplePositions(
+        positions,
+        result.finalScore,
+        result
+      );
+
+      // Attach tooltip handlers to each highlight
+      highlightIds.forEach(highlightId => {
+        const highlightElement = document.getElementById(highlightId);
+        if (highlightElement) {
+          highlightElement.addEventListener('mouseenter', (e) => {
+            const highlightData = highlighter.getHighlightInfo(highlightId);
+            if (highlightData) {
+              tooltip.show(highlightId, highlightData, e);
+            }
+          });
+
+          highlightElement.addEventListener('mouseleave', () => {
+            tooltip.hide();
+          });
+        }
+      });
     }
   });
 
   console.log('Truth Check: Claims highlighted successfully');
 }
 
-// Get CSS class for score
-function getScoreClass(score) {
-  if (score >= 8) return 'high-trust';
-  if (score >= 5) return 'medium-trust';
-  return 'low-trust';
-}
+// Update popup status with detailed pipeline data
+function updatePopupStatusWithPipeline(scoredResults) {
+  const totalClaims = scoredResults.length;
+  const highTrust = scoredResults.filter(item => item.finalScore >= 8).length;
+  const mediumTrust = scoredResults.filter(item => item.finalScore >= 5 && item.finalScore < 8).length;
+  const lowTrust = scoredResults.filter(item => item.finalScore < 5).length;
 
-// Update popup status
-function updatePopupStatus(scoredClaims) {
-  const totalClaims = scoredClaims.length;
-  const highTrust = scoredClaims.filter(item => item.score >= 8).length;
-  const mediumTrust = scoredClaims.filter(item => item.score >= 5 && item.score < 8).length;
-  const lowTrust = scoredClaims.filter(item => item.score < 5).length;
+  // Calculate confidence distribution
+  const highConfidence = scoredResults.filter(item => item.scores.confidence === 'high').length;
+  const mediumConfidence = scoredResults.filter(item => item.scores.confidence === 'medium').length;
+  const lowConfidence = scoredResults.filter(item => item.scores.confidence === 'low').length;
 
-  // Store status for popup
+  // Store detailed status for popup
   const status = {
     ready: true,
     claimsAnalyzed: totalClaims,
@@ -257,7 +359,18 @@ function updatePopupStatus(scoredClaims) {
       high: highTrust,
       medium: mediumTrust,
       low: lowTrust
-    }
+    },
+    confidence: {
+      high: highConfidence,
+      medium: mediumConfidence,
+      low: lowConfidence
+    },
+    features: {
+      highlighting: highlighter.enabled,
+      confidenceFilter: highlighter.confidenceFilter,
+      overrideEngine: CONFIG.features?.enable_override_engine || false
+    },
+    timestamp: Date.now()
   };
 
   // Store in chrome.storage for popup access
@@ -312,16 +425,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'TOGGLE_HIGHLIGHTING') {
-    // Handle highlighting toggle from popup
+    // Handle highlighting toggle from popup using real highlighter
     console.log('Toggling highlighting:', message.enabled);
+    highlighter.setEnabled(message.enabled);
     // Store preference
     chrome.storage.sync.set({ highlightingEnabled: message.enabled });
     sendResponse({ success: true });
   }
 
   if (message.type === 'TOGGLE_CONFIDENCE_FILTER') {
-    // Handle confidence filter toggle from popup
+    // Handle confidence filter toggle from popup using real highlighter
     console.log('Toggling confidence filter:', message.enabled);
+    highlighter.setConfidenceFilter(message.enabled);
     // Store preference
     chrome.storage.sync.set({ confidenceFilterEnabled: message.enabled });
     sendResponse({ success: true });
