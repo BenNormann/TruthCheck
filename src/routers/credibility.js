@@ -3,6 +3,19 @@ import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 import cache from '../foundation/cache.js';
 
+// Backend server configuration - will be set by extension initialization
+let SERVER_CONFIG = {
+  baseUrl: 'http://localhost:3001',
+  apiKey: null,
+  timeout: 10000,
+  retries: 2
+};
+
+// Function to configure server settings
+export function configureServer(config) {
+  SERVER_CONFIG = { ...SERVER_CONFIG, ...config };
+}
+
 class CredibilityRouter {
   constructor() {
     this.sources = CONFIG.apis.credibility_sources.filter(source => source.enabled);
@@ -81,35 +94,46 @@ class CredibilityRouter {
   }
 
   async queryNewsGuard(source, domain) {
-    if (!source.api_key) {
-      throw new Error('NewsGuard API key not configured');
+    // Use backend server for NewsGuard API calls to avoid exposing API keys
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), source.timeout);
+
+    try {
+      const response = await fetch(`${SERVER_CONFIG.baseUrl}/api/credibility/newsguard/${domain}`, {
+        method: 'GET',
+        headers: {
+          'x-api-key': SERVER_CONFIG.apiKey
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('NewsGuard API key not configured - Please set up the backend server');
+        }
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`NewsGuard API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+      }
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Server returned unsuccessful response');
+      }
+
+      return data.data;
+
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error.name === 'AbortError') {
+        throw new Error('NewsGuard request timed out');
+      }
+
+      throw error;
     }
-
-    const url = `https://api.newsguardtech.com/v1/domain/${domain}`;
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${source.api_key}`,
-        'Content-Type': 'application/json'
-      },
-      signal: AbortSignal.timeout(source.timeout)
-    });
-
-    if (!response.ok) {
-      throw new Error(`NewsGuard API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    return {
-      source: 'NewsGuard',
-      score: data.overall_score || 0,
-      rating: this.mapNewsGuardRating(data.rating),
-      credibility: data.credibility_indicators || {},
-      transparency: data.transparency_score || 0,
-      bias: data.bias_rating || 'unknown'
-    };
   }
 
   async queryMediaBiasFactCheck(source, domain) {
@@ -297,15 +321,56 @@ class CredibilityRouter {
 
   // Batch domain checking
   async checkDomainsBatch(domains) {
-    const results = await Promise.allSettled(
-      domains.map(domain => this.checkDomain(domain))
-    );
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout for batch
 
-    return results.map((result, index) => ({
-      domain: domains[index],
-      result: result.status === 'fulfilled' ? result.value : null,
-      error: result.status === 'rejected' ? result.reason : null
-    }));
+    try {
+      const response = await fetch(`${SERVER_CONFIG.baseUrl}/api/credibility/batch`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': SERVER_CONFIG.apiKey
+        },
+        body: JSON.stringify({ domains }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('API key not configured - Please set up the backend server');
+        }
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Batch credibility check error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+      }
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Server returned unsuccessful response');
+      }
+
+      return data.data;
+
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error.name === 'AbortError') {
+        throw new Error('Batch credibility check timed out');
+      }
+
+      // Fallback to individual checks if batch fails
+      const results = await Promise.allSettled(
+        domains.map(domain => this.checkDomain(domain))
+      );
+
+      return results.map((result, index) => ({
+        domain: domains[index],
+        result: result.status === 'fulfilled' ? result.value : null,
+        error: result.status === 'rejected' ? result.reason : null
+      }));
+    }
   }
 }
 

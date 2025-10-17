@@ -28,10 +28,15 @@ class Scorer {
 
   getAIClient() {
     if (!this._aiClient) {
-      // Lazy initialization - use global AIClient or fallback to require
-      this._aiClient = (typeof window !== 'undefined' && window.AIClient)
-        ? new window.AIClient()
-        : new (require('../routers/ai.js').AIClient)();
+      // Lazy initialization - import AIClient properly
+      const { AIClient, configureServer } = require('../routers/ai.js');
+
+      // Configure server settings if available
+      if (typeof window !== 'undefined' && window.SERVER_CONFIG) {
+        configureServer(window.SERVER_CONFIG);
+      }
+
+      this._aiClient = new AIClient();
     }
     return this._aiClient;
   }
@@ -95,13 +100,33 @@ class Scorer {
         assessment: aiAssessment.assessment,
         reasoning: aiAssessment.reasoning
       };
+
+      logger.debug('AI scoring successful:', aiAssessment.overall_score);
+
     } catch (error) {
       logger.error('AI scoring failed:', error);
-      scores.ai = {
-        score: 5,
-        confidence: 'low',
-        error: error.message
-      };
+
+      // If it's a server configuration issue, mark as not available
+      if (error.message.includes('Backend server not configured') ||
+          error.message.includes('Unable to connect to backend server')) {
+        scores.ai = {
+          score: 'n/a',
+          confidence: 'none',
+          error: 'Backend server not configured - Please set up the server with API keys'
+        };
+      } else {
+        // For other errors, try fallback but log the real error
+        logger.warn('Using fallback AI assessment due to error:', error.message);
+        const fallback = this.fallbackAIAssessment(normalizedClaim);
+        scores.ai = {
+          score: fallback.overall_score,
+          confidence: fallback.confidence,
+          assessment: fallback.assessment,
+          reasoning: fallback.reasoning,
+          error: error.message,
+          fallback: true
+        };
+      }
     }
   }
 
@@ -123,10 +148,15 @@ class Scorer {
       };
     } catch (error) {
       logger.error('Credibility scoring failed:', error);
+      // Use tone-based fallback scoring
+      const fallback = this.fallbackCredibilityAssessment(normalizedClaim);
       scores.source_credibility = {
-        score: 5,
-        confidence: 'low',
-        error: error.message
+        score: fallback.score,
+        confidence: fallback.confidence,
+        domain: window.location.hostname,
+        factors: fallback.factors,
+        error: error.message,
+        fallback: true
       };
     }
   }
@@ -141,10 +171,13 @@ class Scorer {
       );
 
       if (searchResults.length === 0) {
+        // Use fallback scoring for no results
+        const fallback = this.fallbackScholarlyAssessment(normalizedClaim, []);
         scores.scholarly = {
-          score: 5,
-          confidence: 'low',
-          explanation: 'No scholarly sources found'
+          score: fallback.score,
+          confidence: fallback.confidence,
+          explanation: fallback.explanation,
+          fallback: true
         };
         return;
       }
@@ -162,10 +195,14 @@ class Scorer {
 
     } catch (error) {
       logger.error('Scholarly scoring failed:', error);
+      // Use fallback scoring for errors
+      const fallback = this.fallbackScholarlyAssessment(normalizedClaim, []);
       scores.scholarly = {
-        score: 5,
-        confidence: 'low',
-        error: error.message
+        score: fallback.score,
+        confidence: fallback.confidence,
+        explanation: fallback.explanation,
+        error: error.message,
+        fallback: true
       };
     }
   }
@@ -214,29 +251,142 @@ class Scorer {
     let confidence = 'medium';
     let reasoning = 'Basic heuristic analysis';
 
-    // Check for sensational language
-    if (claim.includes('shocking') || claim.includes('amazing') || claim.includes('unbelievable')) {
+    // Check for sensational language (negative indicators)
+    const sensationalWords = ['shocking', 'amazing', 'unbelievable', 'incredible', 'mind-blowing', 'astounding'];
+    if (sensationalWords.some(word => claim.includes(word))) {
       score -= 2;
       reasoning = 'Sensational language suggests potential misinformation';
     }
 
-    // Check for extraordinary claims
-    if (claim.includes('cure') || claim.includes('miracle') || claim.includes('revolutionary')) {
+    // Check for extraordinary claims (negative indicators)
+    const extraordinaryWords = ['cure', 'miracle', 'revolutionary', 'breakthrough', 'never before', 'impossible'];
+    if (extraordinaryWords.some(word => claim.includes(word))) {
       score -= 1;
       reasoning = 'Extraordinary claims require substantial evidence';
     }
 
-    // Check for hedging language (suggests uncertainty)
-    if (claim.includes('may') || claim.includes('might') || claim.includes('could')) {
+    // Check for hedging language (reduces confidence)
+    const hedgingWords = ['may', 'might', 'could', 'possibly', 'allegedly', 'supposedly'];
+    if (hedgingWords.some(word => claim.includes(word))) {
       confidence = 'low';
       reasoning = 'Hedging language indicates uncertainty';
     }
 
+    // Check for authoritative language (positive indicators)
+    const authoritativeWords = ['studies show', 'research indicates', 'scientists found', 'experts agree'];
+    if (authoritativeWords.some(phrase => claim.includes(phrase))) {
+      score += 1;
+      reasoning = 'Contains authoritative language suggesting credible sources';
+    }
+
+    // Check for specific numbers/data (positive indicators)
+    const hasNumbers = /\d/.test(claim);
+    const hasPercentages = claim.includes('%') || claim.includes('percent');
+    if (hasNumbers && !hasPercentages) {
+      score += 0.5; // Slight boost for quantified claims
+    }
+
     return {
-      overall_score: Math.max(1, Math.min(10, score)),
+      overall_score: Math.max(1, Math.min(10, Math.round(score))),
       confidence: confidence,
       assessment: reasoning,
       reasoning: reasoning
+    };
+  }
+
+  fallbackCredibilityAssessment(normalizedClaim) {
+    // Use tone and content analysis for credibility fallback
+    const claim = normalizedClaim.original_claim.toLowerCase();
+    const claimType = normalizedClaim.claim_type || 'general';
+
+    let score = 5; // Neutral baseline
+    let confidence = 'medium';
+    const factors = [];
+
+    // Analyze tone for credibility indicators
+    const negativeToneWords = ['conspiracy', 'hoax', 'fake', 'lie', 'scam', 'fraud', 'debunked'];
+    const positiveToneWords = ['verified', 'confirmed', 'evidence-based', 'peer-reviewed', 'research'];
+
+    const negativeCount = negativeToneWords.filter(word => claim.includes(word)).length;
+    const positiveCount = positiveToneWords.filter(word => claim.includes(word)).length;
+
+    if (negativeCount > 0) {
+      score -= negativeCount * 1.5;
+      factors.push(`${negativeCount} negative tone indicators`);
+    }
+
+    if (positiveCount > 0) {
+      score += positiveCount * 1;
+      factors.push(`${positiveCount} positive credibility indicators`);
+    }
+
+    // Adjust based on claim type
+    switch (claimType) {
+      case 'health':
+      case 'scientific':
+        // Scientific claims need stronger evidence, so more skeptical baseline
+        score -= 1;
+        confidence = 'low';
+        factors.push('Scientific claim - requires strong evidence');
+        break;
+      case 'political':
+        // Political claims are often more subjective
+        confidence = 'low';
+        factors.push('Political claim - often subjective');
+        break;
+      default:
+        confidence = 'medium';
+    }
+
+    // Check for emotional manipulation
+    const emotionalWords = ['outrageous', 'terrible', 'wonderful', 'horrible', 'amazing'];
+    if (emotionalWords.some(word => claim.includes(word))) {
+      score -= 1;
+      factors.push('Emotional language detected');
+    }
+
+    return {
+      score: Math.max(1, Math.min(10, Math.round(score))),
+      confidence,
+      factors
+    };
+  }
+
+  fallbackScholarlyAssessment(normalizedClaim, searchResults) {
+    // Fallback when no scholarly sources are available
+    const claim = normalizedClaim.original_claim.toLowerCase();
+    const claimType = normalizedClaim.claim_type || 'general';
+
+    let score = 5;
+    let confidence = 'low';
+    let explanation = 'No scholarly sources available for verification';
+
+    // Adjust based on claim characteristics
+    if (claim.length < 50) {
+      score = 3; // Short claims are harder to verify
+      explanation = 'Short claim - limited context for verification';
+    } else if (claim.length > 200) {
+      score = 7; // Detailed claims often have more substance
+      explanation = 'Detailed claim - more context available';
+    }
+
+    // Scientific/health claims typically need scholarly backing
+    if (claimType === 'health' || claimType === 'scientific') {
+      score -= 2;
+      confidence = 'very_low';
+      explanation = 'Scientific/health claim without scholarly backing';
+    }
+
+    // Check for data/numbers in claim
+    if (/\d/.test(claim)) {
+      score += 1; // Claims with numbers are more specific
+      explanation += ' (contains specific data)';
+    }
+
+    return {
+      score: Math.max(1, Math.min(10, score)),
+      confidence,
+      explanation
     };
   }
 
@@ -315,12 +465,14 @@ class Scorer {
   calculateFinalScore(scores) {
     let weightedSum = 0;
     let totalWeight = 0;
+    const validComponents = [];
 
     for (const [component, data] of Object.entries(scores)) {
-      if (data && typeof data.score === 'number') {
+      if (data && data.score !== 'n/a' && typeof data.score === 'number') {
         const weight = this.weights[component] || 0;
         weightedSum += data.score * weight;
         totalWeight += weight;
+        validComponents.push(component);
       }
     }
 

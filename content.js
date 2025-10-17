@@ -143,17 +143,27 @@ async function loadPipelineModules() {
 }
 
 async function checkApiKeys() {
-  // Check if essential API keys are configured
+  // Note: API keys are now managed by the backend server for security
+  // The extension will use fallback methods when APIs are not available
   const keys = {
-    ai: CONFIG.apis?.ai_provider?.api_key && CONFIG.apis.ai_provider.api_key !== 'null',
-    scholar: CONFIG.apis?.scholar_sources?.some(s => s.enabled),
-    credibility: CONFIG.apis?.credibility_sources?.some(c => c.enabled && c.api_key)
+    ai: true, // Backend server handles OpenAI API keys
+    scholar: true, // Scholar sources use web scraping
+    credibility: true, // Credibility sources use backend server for API keys
   };
 
-  const hasAnyKeys = Object.values(keys).some(k => k);
-
-  if (!hasAnyKeys) {
-    Logger.warn('No API keys configured - running with limited functionality');
+  // Check if backend server is reachable (optional - fallbacks work without it)
+  try {
+    const response = await fetch('http://localhost:3001/health', {
+      method: 'GET',
+      headers: { 'x-api-key': 'check' }
+    });
+    if (response.ok) {
+      Logger.log('Backend server is available - enhanced functionality enabled');
+    } else {
+      Logger.log('Backend server not reachable - running with fallback functionality');
+    }
+  } catch (error) {
+    Logger.log('Backend server not configured - running with fallback functionality');
   }
 
   return keys;
