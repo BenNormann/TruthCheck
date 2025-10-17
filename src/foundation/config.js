@@ -11,25 +11,119 @@ const CONFIG = {
   claim_extraction: {
     method: "hybrid", // "heuristic" | "ai" | "hybrid"
     heuristic_threshold: 0.6,
+    
+    // Factual verb patterns (case-insensitive) - indicate objective statements
     factual_verbs: [
-      "is", "was", "are", "were", "be", "been",
-      "caused", "led", "resulted", "produced",
-      "found", "discovered", "determined", "established",
-      "proved", "demonstrated", "confirmed", "verified",
-      "reported", "stated", "announced", "declared",
-      "claimed", "asserted", "maintained", "argued",
-      "shows", "indicates", "suggests", "implies",
-      "reduces", "increases", "decreases", "improves",
-      "costs", "saves", "generates", "creates"
+      "is", "was", "are", "were", "be", "been", "being",
+      "caused", "causes", "led", "leads", "lead",
+      "resulted", "results", "produced", "produces",
+      "found", "finds", "discovered", "discovers",
+      "determined", "determines", "established", "establishes",
+      "proved", "proves", "demonstrated", "demonstrates",
+      "confirmed", "confirms", "verified", "verifies",
+      "reported", "reports", "stated", "states",
+      "announced", "announces", "declared", "declares",
+      "claimed", "claims", "asserted", "asserts",
+      "maintained", "maintains", "argued", "argues",
+      "told", "tells", "said", "says",
+      "showed", "shows", "indicated", "indicates",
+      "suggested", "suggests", "implied", "implies",
+      "revealed", "reveals", "reduced", "reduces",
+      "increased", "increases", "decreased", "decreases",
+      "improved", "improves", "worsened", "worsens",
+      "cost", "costs", "saved", "saves",
+      "generated", "generates", "created", "creates",
+      "killed", "kills", "infected", "infects",
+      "prevented", "prevents", "treated", "treats",
+      // Legal/news verbs
+      "indicted", "charged", "convicted", "sentenced", "arrested",
+      "sued", "pleaded", "testified", "alleged", "accused",
+      "appointed", "elected", "resigned", "retired", "fired",
+      "hired", "promoted", "demoted", "died", "passed",
+      "signed", "vetoed", "approved", "rejected", "denied",
+      "used", "sent", "received", "emailed", "wrote", "described",
+      // Investigation/contradiction verbs
+      "investigating", "investigated", "confirming", "denied", "refuted",
+      "contradicted", "disputed", "challenged", "verified", "debunked",
+      "witnessed", "observed", "documented", "recorded", "captured",
+      "urged", "warned", "emphasized", "directed", "ordered"
     ],
+    
+    // Claim marker phrases - strong indicators of factual claims
     claim_markers: [
       "according to", "studies show", "research indicates",
-      "experts say", "scientists have found", "data shows",
+      "data reveals", "scientists found", "report states",
+      "statistics show", "evidence shows", "findings indicate",
+      "analysis shows", "experts say", "research found",
+      "scientists have found", "data shows", "study found",
       "evidence suggests", "reports indicate", "findings reveal",
-      "statistics show", "numbers indicate", "figures suggest"
+      "statistics show", "numbers indicate", "figures suggest",
+      "survey found", "poll shows", "census data",
+      "clinical trial", "peer-reviewed", "meta-analysis",
+      "researchers discovered", "investigation found",
+      "official data", "government report",
+      // Legal/news markers
+      "the indictment", "prosecutors say", "court documents",
+      "grand jury", "the complaint", "officials said",
+      "sources say", "witnesses reported", "records show",
+      "documents reveal", "emails show", "testimony indicates",
+      "told fox news", "a spokesperson said", "employee told",
+      "department said", "officials note", "advocates say",
+      "has confirmed", "is investigating", "are inaccurate",
+      "circulating on", "video shows", "images show"
     ],
+    
+    // Abbreviations to protect during sentence splitting
+    abbreviations: [
+      "Dr.", "Mr.", "Mrs.", "Ms.", "Prof.", "Sr.", "Jr.",
+      "vs.", "etc.", "i.e.", "e.g.", "et al.", "Ph.D.",
+      "U.S.", "U.K.", "U.N.", "E.U.", "Inc.", "Corp.",
+      "Ltd.", "Co.", "Dept.", "Gov.", "Rep.", "Sen.",
+      "St.", "Ave.", "Blvd.", "Rd.", "Mt.", "Ft.",
+      "a.m.", "p.m.", "A.M.", "P.M.", "No.", "vol.",
+      "Jan.", "Feb.", "Mar.", "Apr.", "Jun.", "Jul.",
+      "Aug.", "Sep.", "Sept.", "Oct.", "Nov.", "Dec."
+    ],
+    
+    // Percentage and statistical keywords
+    percentage_keywords: ["%", "percent", "percentage"],
+    
+    // Large number patterns - numbers >= this threshold are claim indicators  
+    large_number_threshold: 10, // Lowered to catch claims like "40 leaders", "12 jumps"
+    large_number_units: [
+      "million", "billion", "trillion", "thousand",
+      "people", "cases", "deaths", "patients", "dollars",
+      "infections", "hospitalizations", "vaccinations",
+      "leaders", "sites", "employees", "staff", "jumps",
+      "incidents", "violations", "individuals", "years", "months"
+    ],
+    
+    // Opinion/subjective language markers - indicate NOT a factual claim
+    opinion_markers: [
+      "i think", "i believe", "i feel", "in my opinion",
+      "arguably", "seems", "appears", "might", "could",
+      "probably", "possibly", "maybe", "perhaps",
+      "supposedly", "allegedly", "rumored", "claimed by some"
+    ],
+    
+    // Exclusion patterns (regex) - sentences matching these likely not claims
+    exclude_patterns: [
+      "\\?$",                                    // Ends with question mark
+      "^(and|or|but)\\s",                       // Starts with conjunction alone (removed article check - too strict)
+      "^(i think|i believe|arguably)",          // Starts with opinion marker
+      "^(click here|subscribe|follow|share)",    // Call-to-action
+      "^(warning|disclaimer|note:)"              // Meta-content
+      // Removed: should/must check - too aggressive, filters valid claims
+    ],
+    
+    // Claim length constraints
     min_claim_length: 20,
-    max_claim_length: 200,
+    max_claim_length: 250,
+    
+    // Claim confidence threshold - minimum score to classify as claim
+    claim_confidence_threshold: 0.25,
+    
+    // Sentence endings for splitting
     sentence_endings: ['.', '!', '?', ':', ';']
   },
 

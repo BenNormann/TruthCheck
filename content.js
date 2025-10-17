@@ -278,13 +278,19 @@ async function startProcessing() {
 // Highlight claims on the page using real pipeline
 function highlightClaimsWithPipeline(scoredResults) {
   console.log('Truth Check: Highlighting claims on page...');
+  console.log('Truth Check: Attempting to highlight', scoredResults.length, 'claims');
 
   // Clear existing highlights
   highlighter.removeAllHighlights();
 
+  let highlightedCount = 0;
+
   // Create highlights for each scored claim
-  scoredResults.forEach(result => {
-    if (!result || !result.claim) return;
+  scoredResults.forEach((result, idx) => {
+    if (!result || !result.claim) {
+      console.log('Truth Check: Skipping result', idx, '- no claim text');
+      return;
+    }
 
     // Find all occurrences of the claim text in the DOM
     const walker = document.createTreeWalker(
@@ -296,17 +302,34 @@ function highlightClaimsWithPipeline(scoredResults) {
 
     let node;
     const positions = [];
+    const claimLower = result.claim.toLowerCase().trim();
+    
+    // Normalize whitespace in claim for better matching
+    const claimNormalized = claimLower.replace(/\s+/g, ' ');
 
     while (node = walker.nextNode()) {
       const text = node.textContent;
-      const index = text.toLowerCase().indexOf(result.claim.toLowerCase());
+      const textNormalized = text.toLowerCase().replace(/\s+/g, ' ');
+      
+      // Try exact match first
+      let index = textNormalized.indexOf(claimNormalized);
+      
+      // If no exact match and claim is long, try matching first 50 chars for partial matches
+      if (index === -1 && claimNormalized.length > 50) {
+        const claimPrefix = claimNormalized.substring(0, 50);
+        index = textNormalized.indexOf(claimPrefix);
+      }
 
-      if (index !== -1 && text.length < 1000) {
-        positions.push({
-          node,
-          startIndex: index,
-          endIndex: index + result.claim.length
-        });
+      if (index !== -1 && text.length < 2000) {
+        // Find the actual position in the original (non-normalized) text
+        const actualIndex = text.toLowerCase().indexOf(result.claim.toLowerCase().substring(0, 30));
+        if (actualIndex !== -1) {
+          positions.push({
+            node,
+            startIndex: actualIndex,
+            endIndex: actualIndex + Math.min(result.claim.length, text.length - actualIndex)
+          });
+        }
       }
     }
 
@@ -317,6 +340,8 @@ function highlightClaimsWithPipeline(scoredResults) {
         result.finalScore,
         result
       );
+
+      highlightedCount++;
 
       // Attach tooltip handlers to each highlight
       highlightIds.forEach(highlightId => {
@@ -334,10 +359,15 @@ function highlightClaimsWithPipeline(scoredResults) {
           });
         }
       });
+    } else {
+      // Log claims that couldn't be highlighted for debugging
+      if (idx < 5) {
+        console.log('Truth Check: Could not find text for claim:', result.claim.substring(0, 100) + '...');
+      }
     }
   });
 
-  console.log('Truth Check: Claims highlighted successfully');
+  console.log(`Truth Check: Successfully highlighted ${highlightedCount} out of ${scoredResults.length} claims`);
 }
 
 // Update popup status with detailed pipeline data
