@@ -146,7 +146,6 @@ async function checkApiKeys() {
   // Check if essential API keys are configured
   const keys = {
     ai: CONFIG.apis?.ai_provider?.api_key && CONFIG.apis.ai_provider.api_key !== 'null',
-    factChecker: CONFIG.apis?.fact_checkers?.some(fc => fc.enabled && fc.api_key),
     scholar: CONFIG.apis?.scholar_sources?.some(s => s.enabled),
     credibility: CONFIG.apis?.credibility_sources?.some(c => c.enabled && c.api_key)
   };

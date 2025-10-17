@@ -5,7 +5,7 @@ A comprehensive browser extension that identifies misinformation by scoring clai
 ## Features
 
 - **Hybrid Claim Detection**: Uses both heuristic pattern matching and AI-powered analysis for accurate claim extraction
-- **Multi-Source Scoring**: Evaluates claims using fact-checkers, scholarly sources, source credibility, and content analysis
+- **Multi-Source Scoring**: Evaluates claims using AI analysis, scholarly sources, and source credibility
 - **Real-time Highlighting**: Color-coded highlights (green/yellow/red) based on claim trustworthiness
 - **Interactive Tooltips**: Hover over highlights to see detailed scoring breakdown and evidence
 - **Override Engine**: Detects exact matches against authoritative sources for definitive verdicts
@@ -20,7 +20,7 @@ A comprehensive browser extension that identifies misinformation by scoring clai
 - **Logger**: Comprehensive logging and error handling with graceful degradation
 
 ### Router Layer
-- **Fact-Checker Router**: Queries Google Fact Check, Snopes, and FactCheck.org in priority order
+- **AI Router**: Uses AI analysis for claim credibility assessment
 - **Scholar Router**: Searches Google Scholar, PubMed, Britannica, and arXiv for evidence
 - **Credibility Router**: Checks source credibility via NewsGuard and Media Bias/Fact Check
 - **AI Client**: OpenAI/Anthropic API wrapper with retry logic and rate limiting
@@ -100,10 +100,9 @@ apis: {
 ### Scoring Weights
 ```javascript
 scoring: {
-  fact_checker: { weight: 0.35, enabled: true },
-  source_credibility: { weight: 0.20, enabled: true },
-  scholarly: { weight: 0.30, enabled: true },
-  coherence: { weight: 0.15, enabled: true }
+  ai: { weight: 0.40, enabled: true },
+  source_credibility: { weight: 0.30, enabled: true },
+  scholarly: { weight: 0.30, enabled: true }
 }
 ```
 
@@ -132,7 +131,7 @@ display: {
 4. **Hover for details** - hover over any highlight to see:
    - Overall score (0-10)
    - Confidence level
-   - Component breakdown (fact-checker, scholarly, etc.)
+   - Component breakdown (AI, scholarly, credibility)
    - Source evidence and red flags
 
 ### Extension Controls
@@ -156,7 +155,7 @@ For full functionality, configure these API keys in your environment:
 
 ### Supported Sources
 
-- **Fact-Checkers**: Google Fact Check, Snopes, FactCheck.org
+- **AI Analysis**: OpenAI/Anthropic for claim credibility assessment
 - **Scholarly Sources**: Google Scholar, PubMed, Britannica, arXiv
 - **Credibility Sources**: NewsGuard, Media Bias/Fact Check
 
@@ -177,10 +176,9 @@ For full functionality, configure these API keys in your environment:
 │   │   ├── cache.js       # IndexedDB cache wrapper
 │   │   └── logger.js      # Logging and error handling
 │   ├── routers/           # API integration layer
-│   │   ├── factcheckers.js # Fact-checking services
+│   │   ├── ai.js          # AI API client
 │   │   ├── scholar.js     # Academic sources
-│   │   ├── credibility.js # Source credibility
-│   │   └── ai.js          # AI API client
+│   │   └── credibility.js # Source credibility
 │   ├── pipeline/          # Processing pipeline
 │   │   ├── claimExtractor.js # Claim identification
 │   │   ├── normalizer.js  # Query optimization

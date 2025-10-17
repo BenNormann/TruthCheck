@@ -335,7 +335,7 @@ class Tooltip {
     // Get score label and color based on exact specifications
     const scoreInfo = this.getScoreInfo(finalScore);
 
-    // Generate score breakdown section (4 components in 2x2 grid)
+    // Generate score breakdown section (3 components in grid)
     const breakdownHtml = this.generateBreakdown(components);
 
     // Generate evidence section (conditional)
@@ -359,7 +359,7 @@ class Tooltip {
     const CONFIG = getConfig();
     if (!CONFIG.display.show_breakdown) return '';
 
-    const componentOrder = ['fact_checker', 'source_credibility', 'scholarly', 'coherence'];
+    const componentOrder = ['ai', 'source_credibility', 'scholarly'];
 
     return `
       <div class="truth-check-tooltip-breakdown">
@@ -464,34 +464,6 @@ class Tooltip {
   extractEvidence(components) {
     const evidence = [];
 
-    // Fact-checker evidence
-    if (components.fact_checker) {
-      const score = components.fact_checker.score;
-      if (score >= 8) {
-        evidence.push({
-          source: components.fact_checker.source || 'FactCheck.org',
-          status: 'corroborated',
-          title: components.fact_checker.explanation || 'Fact-check result',
-          url: components.fact_checker.url || '#',
-          excerpt: 'Fact-checking analysis available',
-          type: 'Fact-Checker',
-          date: components.fact_checker.date || null,
-          badge: 'CORROBORATED'
-        });
-      } else if (score <= 3) {
-        evidence.push({
-          source: components.fact_checker.source || 'FactCheck.org',
-          status: 'contradicted',
-          title: components.fact_checker.explanation || 'Fact-check result',
-          url: components.fact_checker.url || '#',
-          excerpt: 'Fact-checking analysis available',
-          type: 'Fact-Checker',
-          date: components.fact_checker.date || null,
-          badge: 'CONTRADICTED'
-        });
-      }
-    }
-
     // Scholarly evidence
     if (components.scholarly && components.scholarly.sources && components.scholarly.sources.length > 0) {
       const primarySource = components.scholarly.sources[0];
@@ -526,10 +498,9 @@ class Tooltip {
 
   getComponentLabel(component) {
     const labels = {
-      fact_checker: 'Fact-Checker',
-      source_credibility: 'Source Credibility',
-      scholarly: 'Scholarly Evidence',
-      coherence: 'Coherence & Flags'
+      ai: 'AI Agent Rating',
+      source_credibility: 'Article Quality',
+      scholarly: 'Scholarly Match'
     };
     return labels[component] || component;
   }

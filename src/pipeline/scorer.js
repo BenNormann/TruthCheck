@@ -3,30 +3,26 @@ import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 import cache from '../foundation/cache.js';
 // Import router instances instead of classes for browser extension compatibility
-import factCheckerRouter from '../routers/factcheckers.js';
 import scholarRouter from '../routers/scholar.js';
 import credibilityRouter from '../routers/credibility.js';
 // Using global AIClient instead of import for browser extension compatibility
 
 class Scorer {
   constructor() {
-    this.factChecker = factCheckerRouter;
     this.scholar = scholarRouter;
     this.credibility = credibilityRouter;
     this._aiClient = null;
 
     this.weights = {
-      fact_checker: CONFIG.scoring.fact_checker.weight,
+      ai: CONFIG.scoring.ai.weight,
       source_credibility: CONFIG.scoring.source_credibility.weight,
-      scholarly: CONFIG.scoring.scholarly.weight,
-      coherence: CONFIG.scoring.coherence.weight
+      scholarly: CONFIG.scoring.scholarly.weight
     };
 
     this.enabled = {
-      fact_checker: CONFIG.scoring.fact_checker.enabled,
+      ai: CONFIG.scoring.ai.enabled,
       source_credibility: CONFIG.scoring.source_credibility.enabled,
-      scholarly: CONFIG.scoring.scholarly.enabled,
-      coherence: CONFIG.scoring.coherence.enabled
+      scholarly: CONFIG.scoring.scholarly.enabled
     };
   }
 
@@ -54,9 +50,9 @@ class Scorer {
     const scores = {};
     const promises = [];
 
-    // Score from fact-checkers (parallel)
-    if (this.enabled.fact_checker) {
-      promises.push(this.scoreFromFactCheckers(normalizedClaim, scores));
+    // Score from AI analysis (parallel)
+    if (this.enabled.ai) {
+      promises.push(this.scoreFromAI(normalizedClaim, scores));
     }
 
     // Score from source credibility (parallel)
@@ -67,11 +63,6 @@ class Scorer {
     // Score from scholarly sources (parallel)
     if (this.enabled.scholarly) {
       promises.push(this.scoreFromScholarly(normalizedClaim, scores));
-    }
-
-    // Score from coherence analysis (parallel)
-    if (this.enabled.coherence) {
-      promises.push(this.scoreFromCoherence(normalizedClaim, scores));
     }
 
     // Execute all scoring in parallel
@@ -91,30 +82,22 @@ class Scorer {
     return result;
   }
 
-  async scoreFromFactCheckers(normalizedClaim, scores) {
+  async scoreFromAI(normalizedClaim, scores) {
     try {
-      logger.debug('Scoring from fact-checkers');
-      const result = await this.factChecker.checkClaim(normalizedClaim.original_claim);
+      logger.debug('Scoring from AI analysis');
 
-      if (result) {
-        scores.fact_checker = {
-          score: result.verdict,
-          confidence: 'high',
-          source: result.source,
-          explanation: result.explanation,
-          url: result.url,
-          date: result.date
-        };
-      } else {
-        scores.fact_checker = {
-          score: 5, // Neutral when no fact-check found
-          confidence: 'low',
-          explanation: 'No fact-check results found'
-        };
-      }
+      // Use AI to analyze the claim credibility
+      const aiAssessment = await this.assessClaimWithAI(normalizedClaim);
+
+      scores.ai = {
+        score: aiAssessment.overall_score,
+        confidence: aiAssessment.confidence,
+        assessment: aiAssessment.assessment,
+        reasoning: aiAssessment.reasoning
+      };
     } catch (error) {
-      logger.error('Fact-checker scoring failed:', error);
-      scores.fact_checker = {
+      logger.error('AI scoring failed:', error);
+      scores.ai = {
         score: 5,
         confidence: 'low',
         error: error.message
@@ -187,31 +170,74 @@ class Scorer {
     }
   }
 
-  async scoreFromCoherence(normalizedClaim, scores) {
+  async assessClaimWithAI(normalizedClaim) {
+    const prompt = CONFIG.prompts.ai_claim_assessment
+      .replace('{claim}', normalizedClaim.original_claim)
+      .replace('{claim_type}', normalizedClaim.claim_type || 'general');
+
     try {
-      logger.debug('Scoring from coherence analysis');
+      const response = await this.getAIClient().query(prompt, {
+        temperature: 0.2,
+        max_tokens: 1000
+      });
 
-      // Get article text for coherence analysis
-      const articleText = this.getArticleText();
+      // Handle different response formats from AI client
+      if (typeof response === 'object' && response !== null) {
+        if (response.content) {
+          return response.content;
+        }
+        if (response.raw_response) {
+          return JSON.parse(response.raw_response);
+        }
+        // If it's already a parsed object, return it
+        return response;
+      }
 
-      const coherenceResult = await this.analyzeCoherence(articleText, normalizedClaim);
-
-      scores.coherence = {
-        score: coherenceResult.coherence_score,
-        confidence: 'medium',
-        red_flags: coherenceResult.red_flags_detected,
-        manipulation_risk: coherenceResult.manipulation_risk,
-        factors: coherenceResult.factors
-      };
+      // If it's a string, try to parse as JSON
+      if (typeof response === 'string') {
+        return JSON.parse(response);
+      }
 
     } catch (error) {
-      logger.error('Coherence scoring failed:', error);
-      scores.coherence = {
-        score: 5,
-        confidence: 'low',
-        error: error.message
-      };
+      logger.error('AI claim assessment failed:', error);
     }
+
+    // Fallback assessment based on claim characteristics
+    return this.fallbackAIAssessment(normalizedClaim);
+  }
+
+  fallbackAIAssessment(normalizedClaim) {
+    // Simple heuristic-based assessment
+    const claim = normalizedClaim.original_claim.toLowerCase();
+
+    let score = 5; // Neutral baseline
+    let confidence = 'medium';
+    let reasoning = 'Basic heuristic analysis';
+
+    // Check for sensational language
+    if (claim.includes('shocking') || claim.includes('amazing') || claim.includes('unbelievable')) {
+      score -= 2;
+      reasoning = 'Sensational language suggests potential misinformation';
+    }
+
+    // Check for extraordinary claims
+    if (claim.includes('cure') || claim.includes('miracle') || claim.includes('revolutionary')) {
+      score -= 1;
+      reasoning = 'Extraordinary claims require substantial evidence';
+    }
+
+    // Check for hedging language (suggests uncertainty)
+    if (claim.includes('may') || claim.includes('might') || claim.includes('could')) {
+      confidence = 'low';
+      reasoning = 'Hedging language indicates uncertainty';
+    }
+
+    return {
+      overall_score: Math.max(1, Math.min(10, score)),
+      confidence: confidence,
+      assessment: reasoning,
+      reasoning: reasoning
+    };
   }
 
   async assessScholarlyEvidence(normalizedClaim, searchResults) {
@@ -285,86 +311,6 @@ class Scorer {
     };
   }
 
-  async analyzeCoherence(articleText, normalizedClaim) {
-    // Extract a relevant excerpt around the claim
-    const excerpt = this.extractRelevantExcerpt(articleText, normalizedClaim.original_claim);
-
-    const prompt = CONFIG.prompts.red_flag_detection.replace('{article_excerpt}', excerpt);
-
-    try {
-      const response = await this.getAIClient().query(prompt, {
-        temperature: 0.3,
-        max_tokens: 1000
-      });
-
-      // Handle different response formats from AI client
-      if (typeof response === 'object' && response !== null) {
-        if (response.content) {
-          return response.content;
-        }
-        if (response.raw_response) {
-          return JSON.parse(response.raw_response);
-        }
-        // If it's already a parsed object, return it
-        return response;
-      }
-
-      // If it's a string, try to parse as JSON
-      if (typeof response === 'string') {
-        return JSON.parse(response);
-      }
-
-    } catch (error) {
-      logger.error('Coherence analysis failed:', error);
-    }
-
-    // Fallback heuristic analysis
-    return this.fallbackCoherenceAnalysis(excerpt);
-  }
-
-  fallbackCoherenceAnalysis(excerpt) {
-    const redFlags = [];
-
-    // Check for sensationalism
-    if (excerpt.includes('SHOCKING') || excerpt.includes('AMAZING') || excerpt.includes('UNBELIEVABLE')) {
-      redFlags.push({
-        flag_type: 'sensationalism',
-        severity: 3,
-        example: 'Sensational language detected',
-        significance: 'May indicate clickbait or exaggeration'
-      });
-    }
-
-    // Check for extraordinary claims
-    if (excerpt.includes('cure') || excerpt.includes('miracle') || excerpt.includes('revolutionary')) {
-      redFlags.push({
-        flag_type: 'extraordinary_claim',
-        severity: 4,
-        example: 'Extraordinary claim without evidence',
-        significance: 'Requires substantial evidence to be credible'
-      });
-    }
-
-    // Check for vague attribution
-    if (excerpt.includes('sources say') || excerpt.includes('experts claim') || excerpt.includes('studies show')) {
-      redFlags.push({
-        flag_type: 'vague_attribution',
-        severity: 2,
-        example: 'Vague source attribution',
-        significance: 'Specific sources would increase credibility'
-      });
-    }
-
-    const coherenceScore = Math.max(1, 10 - (redFlags.length * 2));
-    const manipulationRisk = redFlags.reduce((sum, flag) => sum + flag.severity, 0);
-
-    return {
-      red_flags_detected: redFlags,
-      coherence_score: coherenceScore,
-      manipulation_risk: Math.min(10, manipulationRisk),
-      factors: [`${redFlags.length} red flags detected`]
-    };
-  }
 
   calculateFinalScore(scores) {
     let weightedSum = 0;
