@@ -309,11 +309,15 @@ class CredibilityRouter {
   }
 }
 
+// Export the class itself for use in other modules
+export { CredibilityRouter };
+
 // Create and export singleton instance
 const credibilityRouter = new CredibilityRouter();
 export default credibilityRouter;
 
 // Make credibilityRouter available globally for content scripts
 if (typeof window !== 'undefined') {
-  window.CredibilityRouter = credibilityRouter;
+  window.CredibilityRouter = CredibilityRouter;
+  window.credibilityRouter = credibilityRouter;
 }

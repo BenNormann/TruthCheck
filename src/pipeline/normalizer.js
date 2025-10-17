@@ -2,11 +2,21 @@
 import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 import cache from '../foundation/cache.js';
-import AIClient from '../routers/ai.js';
+// Using global AIClient instead of import for browser extension compatibility
 
 class ClaimNormalizer {
   constructor() {
-    this.aiClient = new AIClient();
+    this._aiClient = null;
+  }
+
+  getAIClient() {
+    if (!this._aiClient) {
+      // Lazy initialization - use global AIClient or fallback to require
+      this._aiClient = (typeof window !== 'undefined' && window.AIClient)
+        ? new window.AIClient()
+        : new (require('../routers/ai.js').AIClient)();
+    }
+    return this._aiClient;
   }
 
   async normalize(claim) {
@@ -68,46 +78,63 @@ class ClaimNormalizer {
     const prompt = CONFIG.prompts.query_normalization.replace('{claim}', claim);
 
     try {
-      const response = await this.aiClient.query(prompt, {
+      const response = await this.getAIClient().query(prompt, {
         temperature: 0.1,
         max_tokens: 1000
       });
 
-      if (response.content) {
+      // Handle different response formats from AI client
+      let responseData = null;
+
+      if (typeof response === 'object' && response !== null) {
+        if (response.content) {
+          responseData = response.content;
+        } else if (response.raw_response) {
+          responseData = response.raw_response;
+        } else {
+          responseData = response;
+        }
+      } else if (typeof response === 'string') {
+        responseData = response;
+      }
+
+      if (responseData) {
         return {
           original_claim: claim,
-          normalized_claim: response.content.normalized_claim || this.simplifyClaim(claim),
-          entities: response.content.key_entities || this.extractEntities(claim),
-          search_queries: response.content.search_queries || this.buildSearchQueries(claim),
-          claim_type: response.content.claim_type || this.classifyClaimType(claim),
-          confidence: response.content.confidence || 0.7,
+          normalized_claim: responseData.normalized_claim || this.simplifyClaim(claim),
+          entities: responseData.key_entities || this.extractEntities(claim),
+          search_queries: responseData.search_queries || this.buildSearchQueries(claim),
+          claim_type: responseData.claim_type || this.classifyClaimType(claim),
+          confidence: responseData.confidence || 0.7,
           ai_generated: true
         };
       }
 
-      if (response.raw_response) {
-        try {
-          const parsed = JSON.parse(response.raw_response);
-          return {
-            original_claim: claim,
-            normalized_claim: parsed.normalized_claim || this.simplifyClaim(claim),
-            entities: parsed.key_entities || this.extractEntities(claim),
-            search_queries: parsed.search_queries || this.buildSearchQueries(claim),
-            claim_type: parsed.claim_type || this.classifyClaimType(claim),
-            confidence: 0.7,
-            ai_generated: true
-          };
-        } catch (error) {
-          logger.error('Failed to parse AI normalization response:', error);
-        }
-      }
+      // Fallback to heuristic normalization if AI fails
+      return {
+        original_claim: claim,
+        normalized_claim: this.simplifyClaim(claim),
+        entities: this.extractEntities(claim),
+        search_queries: this.buildSearchQueries(claim),
+        claim_type: this.classifyClaimType(claim),
+        confidence: 0.5,
+        ai_generated: false
+      };
 
     } catch (error) {
       logger.error('AI normalization failed:', error);
-    }
 
-    // Fallback to heuristic
-    return this.normalizeHeuristic(claim);
+      // Fallback to heuristic normalization if AI fails
+      return {
+        original_claim: claim,
+        normalized_claim: this.simplifyClaim(claim),
+        entities: this.extractEntities(claim),
+        search_queries: this.buildSearchQueries(claim),
+        claim_type: this.classifyClaimType(claim),
+        confidence: 0.5,
+        ai_generated: false
+      };
+    }
   }
 
   simplifyClaim(claim) {

@@ -273,11 +273,18 @@ class AIClient {
   }
 }
 
-// Create and export singleton instance
+// Create singleton instance and make it globally available
+// This works better in browser extension context
 const aiClient = new AIClient();
-export default aiClient;
 
-// Make aiClient available globally for content scripts
+// Make AIClient class and instance available globally for content scripts
 if (typeof window !== 'undefined') {
-  window.AIClient = aiClient;
+  window.AIClient = AIClient;
+  window.aiClient = aiClient;
+}
+
+// For compatibility with import statements in browser extension context
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = aiClient;
+  module.exports.AIClient = AIClient;
 }

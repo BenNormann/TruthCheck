@@ -50,21 +50,8 @@ class FactCheckerRouter {
     const startTime = performance.now();
 
     try {
-      let result;
-
-      switch (source.name) {
-        case 'Google Fact Check':
-          result = await this.queryGoogleFactCheck(source, claim);
-          break;
-        case 'Snopes':
-          result = await this.querySnopes(source, claim);
-          break;
-        case 'FactCheck.org':
-          result = await this.queryFactCheckOrg(source, claim);
-          break;
-        default:
-          throw new Error(`Unsupported fact-checker: ${source.name}`);
-      }
+      // Simple credibility check based on domain factors
+      const result = await this.checkSourceCredibility(source, claim);
 
       const responseTime = performance.now() - startTime;
       logger.logResponse(source.url, 200, responseTime, result);
@@ -78,159 +65,120 @@ class FactCheckerRouter {
     }
   }
 
-  async queryGoogleFactCheck(source, claim) {
-    // Note: Google Fact Check API requires API key and has specific format
-    // This is a simplified implementation - real implementation would use actual API
+  async checkSourceCredibility(source, claim) {
+    // Simple credibility check based on basic web factors
+    // No API calls - just check domain age, HTTPS, and publication date presence
 
-    const searchQuery = encodeURIComponent(claim);
-    const url = `${source.url}search?q=${searchQuery}`;
+    const url = new URL(source.url || window.location.href);
+    const hostname = url.hostname;
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${source.api_key}`,
-        'Content-Type': 'application/json'
-      },
-      signal: AbortSignal.timeout(source.timeout)
-    });
+    // Check HTTPS status (1 point if HTTPS, 0 if HTTP)
+    const hasHttps = url.protocol === 'https:' ? 1 : 0;
 
-    if (!response.ok) {
-      throw new Error(`Google Fact Check API error: ${response.status}`);
-    }
+    // Check for publication date (simple heuristic - look for common date patterns in page)
+    const hasPublicationDate = await this.checkForPublicationDate();
 
-    const data = await response.json();
+    // Check domain age (simulate - in real implementation, you'd query WHOIS or similar)
+    // For demo purposes, we'll use a simple heuristic based on TLD and common patterns
+    const domainAgeScore = await this.estimateDomainAge(hostname);
 
-    // Parse Google Fact Check response format
-    if (data.claims && data.claims.length > 0) {
-      const claimReview = data.claims[0];
+    // Calculate overall credibility score (0-10 scale)
+    const baseScore = 5; // Neutral baseline
+    const httpsBonus = hasHttps * 2; // HTTPS worth 2 points
+    const dateBonus = hasPublicationDate * 2; // Publication date worth 2 points
+    const ageBonus = domainAgeScore; // Domain age contributes its score
 
-      return {
-        source: 'Google Fact Check',
-        claim: claimReview.text,
-        verdict: this.mapGoogleVerdict(claimReview.claimReview[0].textualRating),
-        confidence: 'high',
-        url: claimReview.claimReview[0].url,
-        explanation: claimReview.claimReview[0].textualRating,
-        date: claimReview.claimReview[0].reviewDate
-      };
-    }
-
-    return null;
-  }
-
-  async querySnopes(source, claim) {
-    // Simplified Snopes API query - real implementation would use actual API
-    const searchQuery = encodeURIComponent(claim);
-    const url = `${source.url}search/${searchQuery}`;
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      signal: AbortSignal.timeout(source.timeout)
-    });
-
-    if (!response.ok) {
-      throw new Error(`Snopes API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    // Parse Snopes response format
-    if (data.articles && data.articles.length > 0) {
-      const article = data.articles[0];
+    const totalScore = Math.min(10, baseScore + httpsBonus + dateBonus + ageBonus);
 
       return {
-        source: 'Snopes',
-        claim: article.claim,
-        verdict: this.mapSnopesVerdict(article.rating),
-        confidence: 'high',
-        url: article.url,
-        explanation: article.explanation,
-        date: article.date
-      };
+      source: source.name || 'Source Credibility Check',
+      claim: claim,
+      verdict: totalScore,
+      confidence: 'medium',
+      url: source.url || window.location.href,
+      explanation: `HTTPS: ${hasHttps ? 'Yes (+2)' : 'No'}, Publication Date: ${hasPublicationDate ? 'Yes (+2)' : 'No'}, Domain Age Score: ${domainAgeScore}`,
+      date: new Date().toISOString(),
+      credibility_factors: {
+        https: hasHttps,
+        publication_date: hasPublicationDate,
+        domain_age_score: domainAgeScore
+      }
+    };
+  }
+
+  async checkForPublicationDate() {
+    try {
+      // Simple heuristic to detect publication dates in the page
+      const bodyText = document.body ? document.body.innerText : '';
+
+      // Common date patterns (simplified)
+      const datePatterns = [
+        /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+\d{4}\b/gi,
+        /\b\d{1,2}\/\d{1,2}\/\d{4}\b/g,
+        /\b\d{4}-\d{1,2}-\d{1,2}\b/g,
+        /published:\s+([a-z]+\s+\d{1,2},?\s+\d{4})/gi,
+        /posted:\s+([a-z]+\s+\d{1,2},?\s+\d{4})/gi,
+        /date:\s+([a-z]+\s+\d{1,2},?\s+\d{4})/gi
+      ];
+
+      for (const pattern of datePatterns) {
+        if (pattern.test(bodyText)) {
+          return true;
+        }
+      }
+
+      // Check for common date-related meta tags
+      const metaTags = document.getElementsByTagName('meta');
+      for (let i = 0; i < metaTags.length; i++) {
+        const name = metaTags[i].getAttribute('name') || metaTags[i].getAttribute('property');
+        if (name && (name.includes('publish') || name.includes('date') || name.includes('time'))) {
+          const content = metaTags[i].getAttribute('content');
+          if (content && /\d{4}/.test(content)) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    } catch (error) {
+      logger.error('Error checking for publication date:', error);
+      return false;
+    }
+  }
+
+  async estimateDomainAge(hostname) {
+    // Simple domain age estimation based on TLD and common patterns
+    // In a real implementation, you'd query WHOIS data or use a domain age API
+
+    // Common established domains get higher scores
+    const establishedDomains = [
+      'nytimes.com', 'washingtonpost.com', 'bbc.com', 'bbc.co.uk',
+      'reuters.com', 'ap.org', 'npr.org', 'pbs.org', 'cnn.com',
+      'foxnews.com', 'wsj.com', 'bloomberg.com', 'economist.com',
+      'nature.com', 'sciencemag.org', 'nih.gov', 'cdc.gov',
+      'who.int', 'un.org', 'whitehouse.gov', 'congress.gov'
+    ];
+
+    // Government and educational domains
+    if (hostname.endsWith('.gov') || hostname.endsWith('.edu')) {
+      return 3;
     }
 
-    return null;
-  }
-
-  async queryFactCheckOrg(source, claim) {
-    // Simplified FactCheck.org API query
-    const searchQuery = encodeURIComponent(claim);
-    const url = `${source.url}search?q=${searchQuery}`;
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      signal: AbortSignal.timeout(source.timeout)
-    });
-
-    if (!response.ok) {
-      throw new Error(`FactCheck.org API error: ${response.status}`);
+    // Major news organizations
+    if (establishedDomains.some(domain => hostname === domain || hostname.endsWith('.' + domain))) {
+      return 3;
     }
 
-    const data = await response.json();
-
-    // Parse FactCheck.org response format
-    if (data.factchecks && data.factchecks.length > 0) {
-      const factcheck = data.factchecks[0];
-
-      return {
-        source: 'FactCheck.org',
-        claim: factcheck.claim,
-        verdict: this.mapFactCheckOrgVerdict(factcheck.verdict),
-        confidence: 'high',
-        url: factcheck.url,
-        explanation: factcheck.summary,
-        date: factcheck.date
-      };
+    // Common reputable domains
+    if (hostname.includes('edu') || hostname.includes('ac.') ||
+        hostname.includes('university') || hostname.includes('college')) {
+      return 2;
     }
 
-    return null;
+    // Default for unknown domains
+    return 1;
   }
 
-  mapGoogleVerdict(rating) {
-    const verdictMap = {
-      'True': 10,
-      'Mostly True': 8,
-      'Half True': 5,
-      'Mostly False': 3,
-      'False': 1,
-      'Pants on Fire': 0
-    };
-
-    return verdictMap[rating] || 5;
-  }
-
-  mapSnopesVerdict(rating) {
-    const verdictMap = {
-      'true': 10,
-      'mostly-true': 8,
-      'mixture': 5,
-      'mostly-false': 3,
-      'false': 1,
-      'outdated': 4,
-      'unproven': 5
-    };
-
-    return verdictMap[rating] || 5;
-  }
-
-  mapFactCheckOrgVerdict(verdict) {
-    const verdictMap = {
-      'correct': 10,
-      'mostly-correct': 8,
-      'partial': 5,
-      'mostly-incorrect': 3,
-      'incorrect': 1,
-      'unsupported': 2
-    };
-
-    return verdictMap[verdict] || 5;
-  }
 
   // Get all fact-check results for a claim (for batch processing)
   async checkClaimBatch(claims) {
@@ -246,11 +194,15 @@ class FactCheckerRouter {
   }
 }
 
+// Export the class itself for use in other modules
+export { FactCheckerRouter };
+
 // Create and export singleton instance
 const factCheckerRouter = new FactCheckerRouter();
 export default factCheckerRouter;
 
 // Make factCheckerRouter available globally for content scripts
 if (typeof window !== 'undefined') {
-  window.FactCheckerRouter = factCheckerRouter;
+  window.FactCheckerRouter = FactCheckerRouter;
+  window.factCheckerRouter = factCheckerRouter;
 }

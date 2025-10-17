@@ -34,7 +34,6 @@ class Cache {
         if (!db.objectStoreNames.contains('entries')) {
           const store = db.createObjectStore('entries', { keyPath: 'key' });
           store.createIndex('expires', 'expires', { unique: false });
-          store.createIndex('accessed', 'accessed', { unique: false });
         }
 
         // Create object store for metadata
@@ -57,8 +56,7 @@ class Cache {
       key,
       value: JSON.stringify(value),
       expires: expires.getTime(),
-      created: Date.now(),
-      accessed: Date.now()
+      created: Date.now()
     };
 
     return new Promise((resolve, reject) => {
@@ -98,9 +96,7 @@ class Cache {
           return;
         }
 
-        // Update access time
-        entry.accessed = Date.now();
-        store.put(entry);
+        // Note: Access time update removed to avoid read-only transaction issues
 
         try {
           const value = JSON.parse(entry.value);

@@ -2,11 +2,10 @@
 import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 import cache from '../foundation/cache.js';
-import AIClient from '../routers/ai.js';
 
 class ClaimExtractor {
   constructor() {
-    this.aiClient = new AIClient();
+    this._aiClient = null;
     this.method = CONFIG.claim_extraction.method;
     this.heuristicThreshold = CONFIG.claim_extraction.heuristic_threshold;
     this.factualVerbs = new Set(CONFIG.claim_extraction.factual_verbs);
@@ -14,6 +13,16 @@ class ClaimExtractor {
     this.minLength = CONFIG.claim_extraction.min_claim_length;
     this.maxLength = CONFIG.claim_extraction.max_claim_length;
     this.sentenceEndings = new Set(CONFIG.claim_extraction.sentence_endings);
+  }
+
+  getAIClient() {
+    if (!this._aiClient) {
+      // Lazy initialization - use global AIClient or fallback to require
+      this._aiClient = (typeof window !== 'undefined' && window.AIClient)
+        ? new window.AIClient()
+        : new (require('../routers/ai.js').AIClient)();
+    }
+    return this._aiClient;
   }
 
   async extractClaims(text) {
@@ -107,25 +116,40 @@ Example response format:
 Return only valid JSON array:`;
 
     try {
-      const response = await this.aiClient.query(prompt, {
+      const response = await this.getAIClient().query(prompt, {
         temperature: 0.1,
         max_tokens: 1500
       });
 
       let claims = [];
 
-      if (response.content && Array.isArray(response.content)) {
-        claims = response.content.map(claim => ({
+      // Handle different response formats from AI client
+      let responseData = null;
+
+      if (typeof response === 'object' && response !== null) {
+        if (response.content) {
+          responseData = response.content;
+        } else if (response.raw_response) {
+          responseData = response.raw_response;
+        } else {
+          responseData = response;
+        }
+      } else if (typeof response === 'string') {
+        responseData = response;
+      }
+
+      if (responseData && Array.isArray(responseData)) {
+        claims = responseData.map(claim => ({
           text: claim.text,
           confidence: claim.confidence || 0.5,
           method: 'ai',
           type: claim.type || 'other',
           position: text.indexOf(claim.text)
         }));
-      } else if (response.raw_response) {
+      } else if (responseData) {
         // Fallback: try to parse as JSON
         try {
-          const parsed = JSON.parse(response.raw_response);
+          const parsed = JSON.parse(responseData);
           if (Array.isArray(parsed)) {
             claims = parsed.map(claim => ({
               text: claim.text,

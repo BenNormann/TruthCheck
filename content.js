@@ -11,6 +11,9 @@ const Logger = {
   log: function(message, data = null) {
     console.log(`[TruthCheck] ${message}`, data ? data : '');
   },
+  warn: function(message, data = null) {
+    console.warn(`[TruthCheck WARNING] ${message}`, data ? data : '');
+  },
   error: function(message, error = null) {
     console.error(`[TruthCheck ERROR] ${message}`, error ? error : '');
   },

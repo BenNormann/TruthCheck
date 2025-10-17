@@ -337,11 +337,15 @@ class ScholarRouter {
   }
 }
 
+// Export the class itself for use in other modules
+export { ScholarRouter };
+
 // Create and export singleton instance
 const scholarRouter = new ScholarRouter();
 export default scholarRouter;
 
 // Make scholarRouter available globally for content scripts
 if (typeof window !== 'undefined') {
-  window.ScholarRouter = scholarRouter;
+  window.ScholarRouter = ScholarRouter;
+  window.scholarRouter = scholarRouter;
 }

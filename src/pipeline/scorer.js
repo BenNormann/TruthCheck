@@ -2,17 +2,18 @@
 import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 import cache from '../foundation/cache.js';
-import FactCheckerRouter from '../routers/factcheckers.js';
-import ScholarRouter from '../routers/scholar.js';
-import CredibilityRouter from '../routers/credibility.js';
-import AIClient from '../routers/ai.js';
+// Import router instances instead of classes for browser extension compatibility
+import factCheckerRouter from '../routers/factcheckers.js';
+import scholarRouter from '../routers/scholar.js';
+import credibilityRouter from '../routers/credibility.js';
+// Using global AIClient instead of import for browser extension compatibility
 
 class Scorer {
   constructor() {
-    this.factChecker = new FactCheckerRouter();
-    this.scholar = new ScholarRouter();
-    this.credibility = new CredibilityRouter();
-    this.aiClient = new AIClient();
+    this.factChecker = factCheckerRouter;
+    this.scholar = scholarRouter;
+    this.credibility = credibilityRouter;
+    this._aiClient = null;
 
     this.weights = {
       fact_checker: CONFIG.scoring.fact_checker.weight,
@@ -27,6 +28,16 @@ class Scorer {
       scholarly: CONFIG.scoring.scholarly.enabled,
       coherence: CONFIG.scoring.coherence.enabled
     };
+  }
+
+  getAIClient() {
+    if (!this._aiClient) {
+      // Lazy initialization - use global AIClient or fallback to require
+      this._aiClient = (typeof window !== 'undefined' && window.AIClient)
+        ? new window.AIClient()
+        : new (require('../routers/ai.js').AIClient)();
+    }
+    return this._aiClient;
   }
 
   async scoreClaim(normalizedClaim) {
@@ -211,17 +222,26 @@ class Scorer {
       .replace('{search_results_json}', resultsJson);
 
     try {
-      const response = await this.aiClient.query(prompt, {
+      const response = await this.getAIClient().query(prompt, {
         temperature: 0.2,
         max_tokens: 1500
       });
 
-      if (response.content) {
-        return response.content;
+      // Handle different response formats from AI client
+      if (typeof response === 'object' && response !== null) {
+        if (response.content) {
+          return response.content;
+        }
+        if (response.raw_response) {
+          return JSON.parse(response.raw_response);
+        }
+        // If it's already a parsed object, return it
+        return response;
       }
 
-      if (response.raw_response) {
-        return JSON.parse(response.raw_response);
+      // If it's a string, try to parse as JSON
+      if (typeof response === 'string') {
+        return JSON.parse(response);
       }
 
     } catch (error) {
@@ -272,17 +292,26 @@ class Scorer {
     const prompt = CONFIG.prompts.red_flag_detection.replace('{article_excerpt}', excerpt);
 
     try {
-      const response = await this.aiClient.query(prompt, {
+      const response = await this.getAIClient().query(prompt, {
         temperature: 0.3,
         max_tokens: 1000
       });
 
-      if (response.content) {
-        return response.content;
+      // Handle different response formats from AI client
+      if (typeof response === 'object' && response !== null) {
+        if (response.content) {
+          return response.content;
+        }
+        if (response.raw_response) {
+          return JSON.parse(response.raw_response);
+        }
+        // If it's already a parsed object, return it
+        return response;
       }
 
-      if (response.raw_response) {
-        return JSON.parse(response.raw_response);
+      // If it's a string, try to parse as JSON
+      if (typeof response === 'string') {
+        return JSON.parse(response);
       }
 
     } catch (error) {

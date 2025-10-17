@@ -2,11 +2,10 @@
 import CONFIG from '../foundation/config.js';
 import logger from '../foundation/logger.js';
 import cache from '../foundation/cache.js';
-import AIClient from '../routers/ai.js';
 
 class OverrideEngine {
   constructor() {
-    this.aiClient = new AIClient();
+    this._aiClient = null;
     this.authoritativeSources = [
       'nih.gov',
       'cdc.gov',
@@ -17,6 +16,16 @@ class OverrideEngine {
       'scholar.google.com',
       'pubmed.ncbi.nlm.nih.gov'
     ];
+  }
+
+  getAIClient() {
+    if (!this._aiClient) {
+      // Lazy initialization - use global AIClient or fallback to require
+      this._aiClient = (typeof window !== 'undefined' && window.AIClient)
+        ? new window.AIClient()
+        : new (require('../routers/ai.js').AIClient)();
+    }
+    return this._aiClient;
   }
 
   async checkOverride(normalizedClaim) {
@@ -219,17 +228,26 @@ class OverrideEngine {
       .replace('{source_excerpt}', match.excerpt);
 
     try {
-      const response = await this.aiClient.query(prompt, {
+      const response = await this.getAIClient().query(prompt, {
         temperature: 0.2,
         max_tokens: 500
       });
 
-      if (response.content) {
-        return response.content;
+      // Handle different response formats from AI client
+      if (typeof response === 'object' && response !== null) {
+        if (response.content) {
+          return response.content;
+        }
+        if (response.raw_response) {
+          return JSON.parse(response.raw_response);
+        }
+        // If it's already a parsed object, return it
+        return response;
       }
 
-      if (response.raw_response) {
-        return JSON.parse(response.raw_response);
+      // If it's a string, try to parse as JSON
+      if (typeof response === 'string') {
+        return JSON.parse(response);
       }
 
     } catch (error) {
