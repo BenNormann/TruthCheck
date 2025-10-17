@@ -9,7 +9,7 @@ const CONFIG = {
 
   // Claim extraction settings
   claim_extraction: {
-    method: "hybrid", // "heuristic" | "ai" | "hybrid"
+    method: "hybrid", // "heuristic" | "ai" | "hybrid" - using Express server with OpenAI
     heuristic_threshold: 0.6,
     factual_verbs: [
       "is", "was", "are", "were", "be", "been",
@@ -20,16 +20,31 @@ const CONFIG = {
       "claimed", "asserted", "maintained", "argued",
       "shows", "indicates", "suggests", "implies",
       "reduces", "increases", "decreases", "improves",
-      "costs", "saves", "generates", "creates"
+      "costs", "saves", "generates", "creates",
+      "revealed", "concluded", "demonstrated", "proven",
+      "measured", "calculated", "estimated", "projected",
+      "rose", "fell", "grew", "declined", "surged", "plummeted",
+      "wants", "would", "will", "commemorate", "commemorates",
+      "unveiled", "displayed", "built", "construct", "constructed",
+      "opened", "gave", "approved", "need", "needs", "requires",
+      "takes", "took", "appears", "allows", "prohibits"
     ],
     claim_markers: [
       "according to", "studies show", "research indicates",
       "experts say", "scientists have found", "data shows",
       "evidence suggests", "reports indicate", "findings reveal",
-      "statistics show", "numbers indicate", "figures suggest"
+      "statistics show", "numbers indicate", "figures suggest",
+      "the study", "the research", "the report", "the analysis",
+      "findings show", "results indicate", "survey reveals",
+      "investigation found", "analysis shows", "study reveals",
+      "research shows", "data reveals", "figures show",
+      "the latest", "recent study", "new research", "latest findings",
+      "reportedly", "is reportedly", "are reportedly", "was reportedly",
+      "congress gave", "congress approved", "federal law", "typically",
+      "most notably", "according to a", "in a report", "the report"
     ],
-    min_claim_length: 20,
-    max_claim_length: 200,
+    min_claim_length: 15,
+    max_claim_length: 300,
     sentence_endings: ['.', '!', '?', ':', ';']
   },
 
@@ -83,25 +98,32 @@ Return ONLY valid JSON:
   "claim_type": "health|political|scientific|other"
 }`,
 
-    evidence_assessment: `Evaluate research evidence against a factual claim.
+    evidence_assessment: `You are a fact-checking expert. Analyze the evidence and score this claim from 0-10.
 
 CLAIM: "{claim}"
 
-SEARCH RESULTS (JSON):
-{search_results_json}
+SEARCH RESULTS: {search_results_json}
 
-For each result, determine:
-- Does it directly support the claim? (score: 9-10)
-- Partial/tangential support? (5-8)
-- Contradicts? (1-3)
-- Neutral/irrelevant? (5)
-- Outdated/unreliable? (0-2)
+SCORING CRITERIA (be strict and consistent):
+- 10: Overwhelming evidence, multiple reliable sources confirm
+- 9: Strong evidence from credible sources
+- 8: Good evidence with minor gaps
+- 7: Decent evidence but some limitations
+- 6: Weak evidence, limited support
+- 5: Neutral - no clear evidence either way
+- 4: Evidence suggests claim may be false
+- 3: Evidence contradicts the claim
+- 2: Strong evidence against the claim
+- 1: Overwhelming evidence the claim is false
+- 0: No relevant evidence found
 
-Return ONLY valid JSON:
+IMPORTANT: Use the full 0-10 scale. Don't cluster scores around 5-7.
+
+Return ONLY valid JSON (no other text):
 {
   "overall_score": 0-10,
   "confidence": "high|medium|low",
-  "assessment": "one paragraph summary of key findings",
+  "assessment": "One sentence explaining the score",
   "findings": [
     {
       "source_title": "string",
@@ -251,13 +273,13 @@ Return ONLY valid JSON:
     ],
 
     ai_provider: {
-      provider: "openai", // "openai" | "anthropic"
-      model: "gpt-4-turbo-preview",
+      provider: "openai", // "openai" | "anthropic" | "gemini"
+      model: "gpt-4o-mini", // Cost-effective model
       temperature: 0.1,
-      max_tokens: 1000,
-      timeout: 15000,
+      max_tokens: 3000,
+      timeout: 15000, 
       retries: 3,
-      api_key: null, // Configure API key in extension settings
+      api_key: null, // API key is now handled by Express server
       base_url: "https://api.openai.com/v1"
     }
   },

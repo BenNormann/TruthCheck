@@ -120,6 +120,7 @@ async function loadPipelineModules() {
   try {
     // Load modules using dynamic imports (content script context)
     const modules = await Promise.all([
+      import(chrome.runtime.getURL('src/routers/ai-server.js')),
       import(chrome.runtime.getURL('src/pipeline/claimExtractor.js')),
       import(chrome.runtime.getURL('src/pipeline/normalizer.js')),
       import(chrome.runtime.getURL('src/pipeline/scorer.js')),
@@ -128,12 +129,15 @@ async function loadPipelineModules() {
       import(chrome.runtime.getURL('src/ui/tooltip.js'))
     ]);
 
-    claimExtractor = modules[0].default;
-    claimNormalizer = modules[1].default;
-    scorer = modules[2].default;
-    overrideEngine = modules[3].default;
-    highlighter = modules[4].default;
-    tooltip = modules[5].default;
+    // AI server client is already made global by ai-server.js module
+    console.log('Truth Check: AI server client loaded:', !!window.aiServerClient);
+    
+    claimExtractor = modules[1].default;
+    claimNormalizer = modules[2].default;
+    scorer = modules[3].default;
+    overrideEngine = modules[4].default;
+    highlighter = modules[5].default;
+    tooltip = modules[6].default;
 
     console.log('Truth Check: Pipeline modules loaded successfully');
   } catch (error) {

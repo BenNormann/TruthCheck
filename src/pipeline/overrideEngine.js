@@ -20,10 +20,17 @@ class OverrideEngine {
 
   getAIClient() {
     if (!this._aiClient) {
-      // Lazy initialization - use global AIClient or fallback to require
-      this._aiClient = (typeof window !== 'undefined' && window.AIClient)
-        ? new window.AIClient()
-        : new (require('../routers/ai.js').AIClient)();
+      // Lazy initialization - use global aiServerClient instance if available
+      if (typeof window !== 'undefined' && window.aiServerClient) {
+        console.log('[OVERRIDE] Using global aiServerClient instance');
+        this._aiClient = window.aiServerClient;
+      } else if (typeof window !== 'undefined' && window.aiClient) {
+        console.log('[OVERRIDE] Fallback to global aiClient instance');
+        this._aiClient = window.aiClient;
+      } else {
+        console.error('[OVERRIDE] ❌ AIClient not available in window object');
+        throw new Error('AIClient not loaded. Make sure ai-server.js is imported in content.js');
+      }
     }
     return this._aiClient;
   }

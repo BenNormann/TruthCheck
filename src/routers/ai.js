@@ -133,12 +133,75 @@ class AIClient {
   }
 
   async callAPI(prompt, options) {
-    const requestBody = this.buildRequestBody(prompt, options);
+    console.log('[AI CLIENT] Making API call');
+    console.log('[AI CLIENT] Provider:', this.provider);
+    console.log('[AI CLIENT] Base URL:', this.baseUrl);
+    console.log('[AI CLIENT] API Key:', this.apiKey ? `SET (${this.apiKey.substring(0, 10)}...${this.apiKey.substring(this.apiKey.length - 4)})` : 'NOT SET');
+    console.log('[AI CLIENT] Model:', this.model);
+    
+    if (this.provider === 'gemini') {
+      return this.callGeminiAPI(prompt, options);
+    } else {
+      return this.callOpenAIAPI(prompt, options);
+    }
+  }
+
+  async callGeminiAPI(prompt, options) {
+    const requestBody = this.buildGeminiRequestBody(prompt, options);
+    console.log('[AI CLIENT] Request body:', JSON.stringify({...requestBody, contents: '[hidden]'}));
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), options.timeout);
 
     try {
+      const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
+      console.log('[AI CLIENT] Sending fetch request to Gemini API');
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      console.log('[AI CLIENT] Response status:', response.status);
+      console.log('[AI CLIENT] Response ok:', response.ok);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[AI CLIENT] ❌ Gemini API error response:', errorData);
+        throw new Error(`Gemini API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+      }
+
+      const data = await response.json();
+      console.log('[AI CLIENT] ✅ Received Gemini response data');
+
+      return this.parseGeminiResponse(data);
+
+    } catch (error) {
+      clearTimeout(timeoutId);
+      console.error('[AI CLIENT] ❌ Gemini fetch error:', error);
+
+      if (error.name === 'AbortError') {
+        throw new Error('Gemini request timed out');
+      }
+
+      throw error;
+    }
+  }
+
+  async callOpenAIAPI(prompt, options) {
+    const requestBody = this.buildRequestBody(prompt, options);
+    console.log('[AI CLIENT] Request body:', JSON.stringify({...requestBody, messages: '[hidden]'}));
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), options.timeout);
+
+    try {
+      console.log('[AI CLIENT] Sending fetch request to:', `${this.baseUrl}/chat/completions`);
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -150,18 +213,23 @@ class AIClient {
       });
 
       clearTimeout(timeoutId);
+      console.log('[AI CLIENT] Response status:', response.status);
+      console.log('[AI CLIENT] Response ok:', response.ok);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error('[AI CLIENT] ❌ API error response:', errorData);
         throw new Error(`AI API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
       }
 
       const data = await response.json();
+      console.log('[AI CLIENT] ✅ Received response data');
 
       return this.parseResponse(data);
 
     } catch (error) {
       clearTimeout(timeoutId);
+      console.error('[AI CLIENT] ❌ Fetch error:', error);
 
       if (error.name === 'AbortError') {
         throw new Error('AI request timed out');
@@ -192,6 +260,25 @@ class AIClient {
     };
   }
 
+  buildGeminiRequestBody(prompt, options) {
+    return {
+      contents: [
+        {
+          parts: [
+            {
+              text: `You are a helpful assistant for fact-checking and analysis. Please respond with valid JSON only.\n\n${prompt}`
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: options.temperature,
+        maxOutputTokens: options.max_tokens,
+        responseMimeType: "application/json"
+      }
+    };
+  }
+
   parseResponse(data) {
     const message = data.choices?.[0]?.message?.content;
 
@@ -208,6 +295,31 @@ class AIClient {
         content: message,
         usage: data.usage,
         model: data.model,
+        raw_response: message
+      };
+    }
+  }
+
+  parseGeminiResponse(data) {
+    console.log('[AI CLIENT] Raw Gemini response structure:', JSON.stringify(data, null, 2));
+    
+    const message = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    console.log('[AI CLIENT] Extracted message:', message);
+
+    if (!message) {
+      console.error('[AI CLIENT] No message found in response structure');
+      throw new Error('No response content from Gemini');
+    }
+
+    try {
+      // Try to parse as JSON first
+      return JSON.parse(message);
+    } catch (error) {
+      // If not JSON, return as text
+      return {
+        content: message,
+        usage: data.usageMetadata,
+        model: this.model,
         raw_response: message
       };
     }
