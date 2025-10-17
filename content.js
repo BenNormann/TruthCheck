@@ -156,7 +156,6 @@ async function checkApiKeys() {
   // Check if essential API keys are configured
   const keys = {
     ai: CONFIG.apis?.ai_provider?.api_key && CONFIG.apis.ai_provider.api_key !== 'null',
-    factChecker: CONFIG.apis?.fact_checkers?.some(fc => fc.enabled && fc.api_key),
     scholar: CONFIG.apis?.scholar_sources?.some(s => s.enabled),
     credibility: CONFIG.apis?.credibility_sources?.some(c => c.enabled && c.api_key)
   };
@@ -351,12 +350,12 @@ function highlightClaimsWithPipeline(scoredResults) {
           highlightElement.addEventListener('mouseenter', (e) => {
             const highlightData = highlighter.getHighlightInfo(highlightId);
             if (highlightData) {
-              tooltip.show(highlightId, highlightData, e);
+              tooltip.showTooltip(highlightElement, highlightData);
             }
           });
 
           highlightElement.addEventListener('mouseleave', () => {
-            tooltip.hide();
+            tooltip.scheduleHide();
           });
         }
       });
@@ -418,7 +417,7 @@ function updatePopupStatusWithPipeline(scoredResults) {
   chrome.storage.local.set({ truthCheckStatus: status });
 }
 
-// Add CSS styles for highlights
+// Add CSS styles for highlights (tooltips are handled by styles.css)
 function addHighlightStyles() {
   if (document.getElementById('truth-check-styles')) return;
 

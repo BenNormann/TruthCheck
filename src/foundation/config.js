@@ -53,10 +53,9 @@ const CONFIG = {
 
   // Scoring configuration
   scoring: {
-    fact_checker: { weight: 0.35, enabled: true },
-    source_credibility: { weight: 0.20, enabled: true },
+    ai: { weight: 0.40, enabled: true },
+    source_credibility: { weight: 0.30, enabled: true },
     scholarly: { weight: 0.30, enabled: true },
-    coherence: { weight: 0.15, enabled: true },
     high_trust: 8,
     medium_trust: 5,
     low_trust: 3,
@@ -176,6 +175,32 @@ Return ONLY valid JSON:
   "override_valid": true|false,
   "confidence": 0-1,
   "reasoning": "one sentence"
+}`,
+
+    ai_claim_assessment: `Analyze this factual claim for credibility and assign a trustworthiness score.
+
+CLAIM: "{claim}"
+CLAIM_TYPE: "{claim_type}"
+
+Evaluate based on:
+1. PLAUSIBILITY: Is the claim scientifically, medically, or logically sound?
+2. EVIDENCE STRENGTH: What type of evidence would be needed to support this claim?
+3. CONTEXT: Does this claim align with established knowledge in the field?
+4. LANGUAGE: Does the claim use sensational, absolute, or manipulative language?
+5. SOURCES: What kind of sources typically make such claims?
+
+Consider:
+- Extraordinary claims require extraordinary evidence
+- Sensational language often indicates lower credibility
+- Absolute statements (always, never, everyone) are rarely true
+- Recent, peer-reviewed sources carry more weight than anecdotal evidence
+
+Return ONLY valid JSON:
+{
+  "overall_score": 0-10,
+  "confidence": "high|medium|low",
+  "assessment": "one paragraph explaining the reasoning",
+  "reasoning": "key factors that influenced the score"
 }`
   },
 

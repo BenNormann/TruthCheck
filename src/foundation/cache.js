@@ -210,10 +210,6 @@ class Cache {
     return this.generateKey('normalized', this.hashString(claimText));
   }
 
-  getFactCheckKey(claimHash, source) {
-    return this.generateKey('factcheck', claimHash, source);
-  }
-
   getScholarKey(claimHash, source) {
     return this.generateKey('scholar', claimHash, source);
   }

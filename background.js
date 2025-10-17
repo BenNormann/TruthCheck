@@ -11,10 +11,9 @@ let CONFIG = {
     high_trust: 8,
     medium_trust: 5,
     low_trust: 3,
-    fact_checker: { weight: 0.35, enabled: true },
-    source_credibility: { weight: 0.20, enabled: true },
-    scholarly: { weight: 0.30, enabled: true },
-    coherence: { weight: 0.15, enabled: true }
+    ai: { weight: 0.40, enabled: true },
+    source_credibility: { weight: 0.30, enabled: true },
+    scholarly: { weight: 0.30, enabled: true }
   },
   display: {
     colors: {
