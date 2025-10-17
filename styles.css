@@ -27,6 +27,55 @@
   border-left: 3px solid #ef4444;
 }
 
+/* Inline mini-meter shown next to each highlighted claim */
+.truth-check-meter {
+  display: inline-block;
+  width: 28px;
+  height: 6px;
+  margin-left: 6px;
+  background: #e5e7eb; /* gray-200 */
+  border-radius: 3px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.truth-check-meter-fill {
+  display: block;
+  height: 100%;
+  width: 0%; /* set inline */
+  background: #9ca3af; /* gray-400 fallback */
+}
+
+.truth-check-highlight.high-trust .truth-check-meter-fill { background: #22c55e; }
+.truth-check-highlight.medium-trust .truth-check-meter-fill { background: #eab308; }
+.truth-check-highlight.low-trust .truth-check-meter-fill { background: #ef4444; }
+
+/* Small letter label for clarity (H/M/L) */
+.truth-check-meter-label {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  height: 14px;
+  line-height: 14px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 7px;
+  vertical-align: middle;
+}
+
+.truth-check-meter-label.high {
+  background: #dcfce7;
+  color: #166534;
+}
+.truth-check-meter-label.medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+.truth-check-meter-label.low {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .truth-check-tooltip {
   position: absolute;
   background: white;
@@ -247,4 +296,108 @@
     max-width: 280px;
     min-width: 250px;
   }
+}
+
+/* Top-right overlay (overview + logs) */
+.truth-check-overlay {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 300px;
+  max-height: 60vh;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0,0,0,.15);
+  z-index: 2147483646; /* on top */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #111827;
+  overflow: hidden;
+}
+
+.truth-check-overlay.minimized .tc-ovl-body { display: none; }
+
+.tc-ovl-tabs { display: flex; gap: 0; border-bottom: 1px solid #e5e7eb; }
+.tc-ovl-tab {
+  flex: 1;
+  border: none;
+  background: #f3f4f6;
+  color: #374151;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.tc-ovl-tab.active { background: #ffffff; color: #111827; font-weight: 600; }
+.tc-ovl-pane.hidden { display: none; }
+
+.tc-ovl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #111827;
+  color: #f9fafb;
+}
+
+.tc-ovl-title { font-weight: 700; font-size: 13px; }
+.tc-ovl-actions { display: flex; gap: 6px; }
+.tc-ovl-btn {
+  border: none;
+  background: #374151;
+  color: #f9fafb;
+  width: 22px; height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tc-ovl-btn:hover { background: #4b5563; }
+
+.tc-ovl-body { padding: 10px; }
+.tc-ovl-section { margin-bottom: 10px; }
+.tc-ovl-label { font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+
+.tc-ovl-status { font-size: 13px; color: #111827; }
+
+.tc-ovl-counts { display: flex; gap: 10px; }
+.tc-ovl-count { background: #f9fafb; padding: 6px 8px; border-radius: 6px; border: 1px solid #f3f4f6; display: flex; align-items: baseline; gap: 6px; }
+.tc-ovl-count-num { font-weight: 700; color: #111827; }
+.tc-ovl-count-label { font-size: 11px; color: #6b7280; text-transform: uppercase; }
+
+.tc-ovl-logs {
+  background: #f9fafb;
+  border: 1px solid #f3f4f6;
+  border-radius: 6px;
+  height: 160px;
+  overflow: auto;
+  padding: 6px;
+}
+.tc-ovl-log { font-size: 11px; display: flex; gap: 6px; align-items: baseline; padding: 2px 0; color: #374151; }
+.tc-ovl-log-time { color: #9ca3af; min-width: 58px; }
+.tc-ovl-log-level { font-weight: 700; min-width: 46px; text-transform: uppercase; }
+.tc-ovl-log-info .tc-ovl-log-level { color: #2563eb; }
+.tc-ovl-log-warn .tc-ovl-log-level { color: #eab308; }
+.tc-ovl-log-error .tc-ovl-log-level { color: #ef4444; }
+.tc-ovl-log-debug .tc-ovl-log-level { color: #6b7280; }
+
+/* Claims list */
+.tc-ovl-claims { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow: auto; }
+.tc-ovl-claim { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 6px; background: #f9fafb; border: 1px solid #f3f4f6; border-radius: 6px; padding: 6px; }
+.tc-ovl-claim-index { font-size: 11px; font-weight: 700; color: #6b7280; text-align: center; }
+.tc-ovl-claim-main { display: flex; flex-direction: column; gap: 4px; }
+.tc-ovl-claim-text { font-size: 12px; color: #111827; max-height: 3.2em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.tc-ovl-claim-meta { display: flex; gap: 6px; align-items: center; }
+.tc-ovl-claim-level { display: inline-block; font-size: 10px; font-weight: 700; border-radius: 10px; padding: 0 6px; height: 16px; line-height: 16px; }
+.tc-ovl-claim-level.high { background: #dcfce7; color: #166534; }
+.tc-ovl-claim-level.medium { background: #fef3c7; color: #92400e; }
+.tc-ovl-claim-level.low { background: #fee2e2; color: #991b1b; }
+.tc-ovl-claim-score { font-size: 11px; color: #374151; }
+.tc-ovl-claim-view { border: 1px solid #e5e7eb; background: #ffffff; color: #111827; font-size: 12px; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+.tc-ovl-claim-view:hover { background: #f3f4f6; }
+.tc-ovl-empty { font-size: 12px; color: #6b7280; text-align: center; padding: 10px; }
+
+/* Flash highlight when scrolling to a claim */
+.tc-flash { animation: tcFlash 1.2s ease-out; }
+@keyframes tcFlash {
+  0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.7); }
+  50% { box-shadow: 0 0 0 6px rgba(59,130,246,0.2); }
+  100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
 }

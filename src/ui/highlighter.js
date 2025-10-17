@@ -42,6 +42,27 @@ class Highlighter {
       highlightSpan.id = highlightId;
       highlightSpan.textContent = highlightText;
 
+      // Add compact meter visual next to the claim
+      try {
+        const meter = document.createElement('span');
+        meter.className = 'truth-check-meter';
+        const fill = document.createElement('span');
+        fill.className = 'truth-check-meter-fill';
+        const pct = Math.max(0, Math.min(100, Math.round(((result.finalScore || 0) / 10) * 100)));
+        fill.style.width = pct + '%';
+        meter.appendChild(fill);
+        highlightSpan.appendChild(meter);
+
+        // Add letter label (H/M/L) for clarity
+        const level = this.getLevelFromScore(result.finalScore || 0);
+        const label = document.createElement('span');
+        label.className = `truth-check-meter-label ${level}`;
+        label.textContent = level === 'high' ? 'H' : level === 'medium' ? 'M' : 'L';
+        highlightSpan.appendChild(label);
+      } catch (_) {
+        // Non-fatal: if meter fails, continue without it
+      }
+
       // Store metadata
       this.highlights.set(highlightId, {
         id: highlightId,
@@ -147,14 +168,30 @@ class Highlighter {
       const newColor = this.getColorFromScore(newResult.finalScore);
       if (newColor !== highlight.color) {
         highlight.color = newColor;
-
-        // Update CSS class
-        highlight.positions.forEach(pos => {
-          if (pos.node) {
-            pos.node.className = `truth-check-highlight ${this.getColorClass(newColor)}`;
-          }
-        });
       }
+
+      // Always update CSS class based on numeric score (high/medium/low)
+      const levelClass = this.getColorClass(newResult.finalScore);
+      const levelKey = this.getLevelFromScore(newResult.finalScore);
+      const pct = Math.max(0, Math.min(100, Math.round(((newResult.finalScore || 0) / 10) * 100)));
+
+      highlight.positions.forEach(pos => {
+        if (pos.node) {
+          pos.node.className = `truth-check-highlight ${levelClass}`;
+
+          // Update meter fill if present
+          const fill = pos.node.querySelector('.truth-check-meter-fill');
+          if (fill) fill.style.width = pct + '%';
+
+          // Update label if present
+          const label = pos.node.querySelector('.truth-check-meter-label');
+          if (label) {
+            label.textContent = levelKey === 'high' ? 'H' : levelKey === 'medium' ? 'M' : 'L';
+            label.classList.remove('high', 'medium', 'low');
+            label.classList.add(levelKey);
+          }
+        }
+      });
 
       logger.debug('Updated highlight:', highlightId);
       return true;
@@ -163,6 +200,12 @@ class Highlighter {
       logger.error('Error updating highlight:', error);
       return false;
     }
+  }
+
+  getLevelFromScore(score) {
+    if (score >= CONFIG.scoring.high_trust) return 'high';
+    if (score >= CONFIG.scoring.medium_trust) return 'medium';
+    return 'low';
   }
 
   getColorFromScore(score) {

@@ -45,7 +45,7 @@ const Cache = {
 };
 
 // Pipeline modules (loaded dynamically)
-let claimExtractor, claimNormalizer, scorer, overrideEngine, highlighter, tooltip;
+let claimExtractor, claimNormalizer, scorer, overrideEngine, highlighter, tooltip, overlay;
 
 // Simple utilities
 const Utils = {
@@ -90,7 +90,7 @@ const Utils = {
 
 async function initializeExtension() {
   try {
-    console.log('Truth Check: Initializing extension...');
+  console.log('Truth Check: Initializing extension...');
 
     // Load CONFIG from background script
     console.log('Truth Check: Loading configuration...');
@@ -99,6 +99,14 @@ async function initializeExtension() {
     // Load pipeline modules dynamically
     console.log('Truth Check: Loading pipeline modules...');
     await loadPipelineModules();
+
+    try {
+      overlay.init();
+      overlay.setStatus('Ready');
+      overlay.setCounts({ claims: 0, normalized: 0, highlighted: 0 });
+    } catch (e) {
+      console.warn('Truth Check: overlay init failed', e);
+    }
 
     console.log('Truth Check: Extension initialized successfully');
     startProcessing();
@@ -125,7 +133,8 @@ async function loadPipelineModules() {
       import(chrome.runtime.getURL('src/pipeline/scorer.js')),
       import(chrome.runtime.getURL('src/pipeline/overrideEngine.js')),
       import(chrome.runtime.getURL('src/ui/highlighter.js')),
-      import(chrome.runtime.getURL('src/ui/tooltip.js'))
+      import(chrome.runtime.getURL('src/ui/tooltip.js')),
+      import(chrome.runtime.getURL('src/ui/overlay.js'))
     ]);
 
     claimExtractor = modules[0].default;
@@ -134,6 +143,7 @@ async function loadPipelineModules() {
     overrideEngine = modules[3].default;
     highlighter = modules[4].default;
     tooltip = modules[5].default;
+    overlay = modules[6].default;
 
     console.log('Truth Check: Pipeline modules loaded successfully');
   } catch (error) {
@@ -178,6 +188,7 @@ async function startProcessing() {
 
     // Extract article content
     console.log('Truth Check: Extracting article content...');
+    try { overlay && overlay.setStatus('Extracting article content'); } catch {}
     const articleContent = Utils.extractArticleContent();
     console.log('Truth Check: Article content length:', articleContent?.length || 0);
 
@@ -192,6 +203,10 @@ async function startProcessing() {
     // Extract claims from article using real pipeline
     console.log('Truth Check: Extracting claims from article...');
     const claimResults = await claimExtractor.extractClaims(articleContent);
+    try {
+      overlay && overlay.setCounts({ claims: claimResults.length });
+      overlay && overlay.setStatus('Normalizing claims');
+    } catch {}
     const claims = claimResults.map(c => c.text);
     console.log('Truth Check: Claims found:', claims.length);
 
@@ -207,6 +222,10 @@ async function startProcessing() {
     // Normalize claims
     console.log('Truth Check: Normalizing claims...');
     const normalizedResults = await claimNormalizer.normalizeBatch(claims);
+    try {
+      overlay && overlay.setCounts({ normalized: normalizedResults.length });
+      overlay && overlay.setStatus('Scoring claims');
+    } catch {}
     const normalizedClaims = normalizedResults.map(r => r.normalized).filter(n => n !== null);
 
     if (normalizedClaims.length === 0) {
@@ -266,6 +285,11 @@ async function startProcessing() {
 
     // Highlight claims on page using real highlighter
     highlightClaimsWithPipeline(scoredResults);
+    try {
+      const highlighted = highlighter.getAllHighlights()?.length || 0;
+      overlay && overlay.setCounts({ highlighted });
+      overlay && overlay.setStatus('Done');
+    } catch {}
 
     // Update popup status
     updatePopupStatusWithPipeline(scoredResults);
@@ -284,6 +308,7 @@ function highlightClaimsWithPipeline(scoredResults) {
   highlighter.removeAllHighlights();
 
   // Create highlights for each scored claim
+  const overlayClaims = [];
   scoredResults.forEach(result => {
     if (!result || !result.claim) return;
 
@@ -335,10 +360,23 @@ function highlightClaimsWithPipeline(scoredResults) {
           });
         }
       });
+
+      // Add to overlay claims list (first occurrence)
+      const level = (result.finalScore >= (CONFIG.scoring?.high_trust || 8))
+        ? 'high'
+        : (result.finalScore >= (CONFIG.scoring?.medium_trust || 5)) ? 'medium' : 'low';
+      overlayClaims.push({
+        text: result.claim,
+        score: result.finalScore,
+        level,
+        highlightIds
+      });
     }
   });
 
   console.log('Truth Check: Claims highlighted successfully');
+
+  try { overlay && overlay.setClaims(overlayClaims); } catch {}
 }
 
 // Update popup status with detailed pipeline data
