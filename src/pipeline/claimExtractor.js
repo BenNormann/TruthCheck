@@ -8,11 +8,23 @@ class ClaimExtractor {
     this._aiClient = null;
     this.method = CONFIG.claim_extraction.method;
     this.heuristicThreshold = CONFIG.claim_extraction.heuristic_threshold;
+    this.weights = CONFIG.claim_extraction.weights || {
+      factual_verb: 0.2,
+      claim_marker: 0.3,
+      percent_number: 0.2,
+      big_number: 0.2,
+      scientific_term: 0.1,
+      comparative_language: 0.1,
+      opinion_penalty: -0.2,
+      disqualifier_penalty: -1.0
+    };
     this.factualVerbs = new Set(CONFIG.claim_extraction.factual_verbs);
     this.claimMarkers = new Set(CONFIG.claim_extraction.claim_markers);
     this.minLength = CONFIG.claim_extraction.min_claim_length;
     this.maxLength = CONFIG.claim_extraction.max_claim_length;
     this.sentenceEndings = new Set(CONFIG.claim_extraction.sentence_endings);
+    this.disqualifyingMarkers = new Set(CONFIG.claim_extraction.disqualifying_markers || []);
+    this.bigNumberCfg = CONFIG.claim_extraction.big_number || { min_digits: 4, scale_words: ["thousand", "million", "billion", "trillion"] };
   }
 
   getAIClient() {
@@ -62,6 +74,11 @@ class ClaimExtractor {
 
       // Skip if too short or too long
       if (trimmedSentence.length < this.minLength || trimmedSentence.length > this.maxLength) {
+        continue;
+      }
+
+      // Skip if contains any disqualifying markers (e.g., '?')
+      if (this.containsDisqualifier(trimmedSentence)) {
         continue;
       }
 
@@ -174,7 +191,7 @@ Return only valid JSON array:`;
   }
 
   splitIntoSentences(text) {
-    // Enhanced sentence splitting that handles various punctuation
+    // Enhanced sentence splitting that handles punctuation, decimals, and abbreviations
     const sentences = [];
     let currentSentence = '';
     let parenthesesDepth = 0;
@@ -182,6 +199,7 @@ Return only valid JSON array:`;
     for (let i = 0; i < text.length; i++) {
       const char = text[i];
       const prevChar = i > 0 ? text[i - 1] : '';
+      const nextChar = i < text.length - 1 ? text[i + 1] : '';
 
       // Track parentheses depth
       if (char === '(' || char === '[') parenthesesDepth++;
@@ -191,8 +209,7 @@ Return only valid JSON array:`;
 
       // Check for sentence endings (but not inside parentheses)
       if (parenthesesDepth === 0 && this.sentenceEndings.has(char)) {
-        // Don't split on common abbreviations and titles
-        if (!this.isAbbreviation(prevChar, char)) {
+        if (this.isSentenceBoundary(text, i, prevChar, char, nextChar)) {
           const trimmed = currentSentence.trim();
           if (trimmed.length > 10) { // Minimum sentence length
             sentences.push(trimmed);
@@ -211,58 +228,106 @@ Return only valid JSON array:`;
     return sentences;
   }
 
-  isAbbreviation(prevChar, endingChar) {
-    // Don't split on common abbreviations
-    const abbreviations = ['Dr.', 'Mr.', 'Mrs.', 'Ms.', 'vs.', 'etc.', 'i.e.', 'e.g.', 'Jr.', 'Sr.'];
-    const potentialAbbrev = prevChar + endingChar;
+  isSentenceBoundary(text, index, prevChar, char, nextChar) {
+    // Avoid splitting inside decimals like 3.5
+    if (char === '.' && /\d/.test(prevChar) && /\d/.test(nextChar)) {
+      return false;
+    }
 
-    return abbreviations.some(abbrev => potentialAbbrev.includes(abbrev));
+    // Avoid splitting within time formats like 10:30
+    if (char === ':' && /\d/.test(prevChar) && /\d/.test(nextChar)) {
+      return false;
+    }
+
+    // Avoid splitting on common abbreviations and titles (case-insensitive)
+    if (char === '.') {
+      const windowStart = Math.max(0, index - 10);
+      const slice = text.slice(windowStart, index + 1).toLowerCase();
+      const abbrevPatterns = [
+        'dr.', 'mr.', 'mrs.', 'ms.', 'vs.', 'etc.', 'i.e.', 'e.g.', 'jr.', 'sr.',
+        'prof.', 'gen.', 'sen.', 'rep.', 'gov.', 'st.', 'no.'
+      ];
+      if (abbrevPatterns.some(a => slice.endsWith(a))) {
+        return false;
+      }
+
+      // Avoid splitting on initials/acronyms like U.S., U.K., E.U.
+      // Pattern: Letter '.' Letter (optionally followed by '.')
+      const around = text.slice(Math.max(0, index - 2), Math.min(text.length, index + 2));
+      if (/^[A-Za-z]\.[A-Za-z]$/.test(around) || /^[A-Za-z]\.[A-Za-z]\./.test(text.slice(Math.max(0, index - 2), Math.min(text.length, index + 3)))) {
+        return false;
+      }
+
+      // Avoid splitting in domain names like example.com (letter '.' letter)
+      if (/[A-Za-z]/.test(prevChar) && /[A-Za-z]/.test(nextChar)) {
+        return false;
+      }
+    }
+
+    // By default, treat as a sentence boundary
+    return true;
   }
 
   scoreClaimLikelihood(sentence) {
     let score = 0;
 
+    // Normalize contractions we care about (e.g., "'s" -> " is")
+    const normalized = sentence
+      .replace(/[’']s\b/gi, ' is');
+
     // Check for factual verbs
-    const words = sentence.toLowerCase().split(/\s+/);
+    const words = normalized.toLowerCase().split(/\s+/);
     for (const word of words) {
       if (this.factualVerbs.has(word)) {
-        score += 0.2;
+        score += this.weights.factual_verb;
       }
     }
 
     // Check for claim markers
     for (const marker of this.claimMarkers) {
-      if (sentence.toLowerCase().includes(marker)) {
-        score += 0.3;
+      if (normalized.toLowerCase().includes(marker)) {
+        score += this.weights.claim_marker;
       }
     }
 
     // Check for numbers/statistics
-    if (/\d+%|\d+\s*percent|\$[\d,]+|[\d,]+\s*(people|cases|deaths|patients)/i.test(sentence)) {
-      score += 0.2;
+    if (/\d+%|\d+\s*percent/i.test(normalized)) {
+      score += this.weights.percent_number;
+    }
+
+    // Big numbers (configurable): 4+ digits OR scale words
+    const bigNumberRegex = new RegExp(`\\b\\d{${this.bigNumberCfg.min_digits},}\\b`);
+    const scaleWordsRegex = new RegExp(`\\b(${(this.bigNumberCfg.scale_words || []).join('|')})\\b`, 'i');
+    if (bigNumberRegex.test(normalized) || scaleWordsRegex.test(normalized)) {
+      score += this.weights.big_number;
     }
 
     // Check for scientific/medical terms
-    if (/\b(vaccine|study|research|clinical|trial|evidence|data|statistics|analysis)\b/i.test(sentence)) {
-      score += 0.1;
+    if (/\b(vaccine|study|research|clinical|trial|evidence|data|statistics|analysis)\b/i.test(normalized)) {
+      score += this.weights.scientific_term;
     }
 
     // Check for comparative/superlative language
-    if (/\b(higher|lower|more|less|best|worst|most|least|increase|decrease)\b/i.test(sentence)) {
-      score += 0.1;
+    if (/\b(higher|lower|more|less|best|worst|most|least|increase|decrease)\b/i.test(normalized)) {
+      score += this.weights.comparative_language;
     }
 
     // Penalty for opinion-like language
-    if (/\b(believe|think|feel|hope|wish|want|should|must|need)\b/i.test(sentence)) {
-      score -= 0.2;
-    }
-
-    // Penalty for questions
-    if (sentence.includes('?')) {
-      score -= 0.3;
+    if (/\b(believe|think|feel|hope|wish|want|should|must|need)\b/i.test(normalized)) {
+      score += this.weights.opinion_penalty;
     }
 
     return Math.max(0, Math.min(1, score));
+  }
+
+  containsDisqualifier(sentence) {
+    const lower = sentence.toLowerCase();
+    for (const mark of this.disqualifyingMarkers) {
+      if (mark && lower.includes(mark.toLowerCase())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   evaluateHeuristicConfidence(claims, originalText) {

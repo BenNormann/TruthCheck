@@ -42,6 +42,8 @@ class Highlighter {
       highlightSpan.id = highlightId;
       highlightSpan.textContent = highlightText;
 
+      // Inline meter removed (tooltip now shows score meter)
+
       // Store metadata
       this.highlights.set(highlightId, {
         id: highlightId,
@@ -147,14 +149,16 @@ class Highlighter {
       const newColor = this.getColorFromScore(newResult.finalScore);
       if (newColor !== highlight.color) {
         highlight.color = newColor;
-
-        // Update CSS class
-        highlight.positions.forEach(pos => {
-          if (pos.node) {
-            pos.node.className = `truth-check-highlight ${this.getColorClass(newColor)}`;
-          }
-        });
       }
+
+      // Always update CSS class based on numeric score (high/medium/low)
+      const levelClass = this.getColorClass(newResult.finalScore);
+
+      highlight.positions.forEach(pos => {
+        if (pos.node) {
+          pos.node.className = `truth-check-highlight ${levelClass}`;
+        }
+      });
 
       logger.debug('Updated highlight:', highlightId);
       return true;
@@ -164,6 +168,8 @@ class Highlighter {
       return false;
     }
   }
+
+  // legacy helper removed (letter labels no longer shown)
 
   getColorFromScore(score) {
     if (score >= CONFIG.scoring.high_trust) {

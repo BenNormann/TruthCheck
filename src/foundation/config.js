@@ -11,6 +11,17 @@ const CONFIG = {
   claim_extraction: {
     method: "hybrid", // "heuristic" | "ai" | "hybrid"
     heuristic_threshold: 0.6,
+    // Heuristic weights (tunable)
+    weights: {
+      factual_verb: 0.2,
+      claim_marker: 0.3,
+      percent_number: 0.2,
+      big_number: 0.2,
+      scientific_term: 0.1,
+      comparative_language: 0.1,
+      opinion_penalty: -0.2,
+      disqualifier_penalty: -1.0
+    },
     factual_verbs: [
       "is", "was", "are", "were", "be", "been",
       "caused", "led", "resulted", "produced",
@@ -28,6 +39,13 @@ const CONFIG = {
       "evidence suggests", "reports indicate", "findings reveal",
       "statistics show", "numbers indicate", "figures suggest"
     ],
+    // Sentences containing any of these characters/patterns will be disqualified
+    disqualifying_markers: ["?"],
+    // Big-number heuristic configuration
+    big_number: {
+      min_digits: 4, // e.g., 1000+
+      scale_words: ["thousand", "million", "billion", "trillion"]
+    },
     min_claim_length: 20,
     max_claim_length: 200,
     sentence_endings: ['.', '!', '?', ':', ';']
