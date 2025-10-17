@@ -344,8 +344,12 @@ class Tooltip {
     return `
       <div class="truth-check-tooltip-header">
         <div class="truth-check-tooltip-claim">${this.escapeHtml(displayClaim)}</div>
-        <div class="truth-check-tooltip-score">${finalScore}</div>
+        <div class="truth-check-tooltip-score">${finalScore.toFixed ? finalScore.toFixed(1) : finalScore}</div>
         <div class="truth-check-tooltip-label">${scoreInfo.label}</div>
+      </div>
+
+      <div class="truth-check-tooltip-meter">
+        <div class="truth-check-tooltip-meter-fill" style="width:${Math.max(0, Math.min(100, Math.round(((finalScore || 0)/10)*100)))}%; background:${scoreInfo.color}"></div>
       </div>
 
       ${breakdownHtml}

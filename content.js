@@ -433,15 +433,12 @@ function addHighlightStyles() {
     }
     .truth-check-highlight.score-high-trust {
       background-color: rgba(34, 197, 94, 0.2);
-      border: 2px solid #22c55e;
     }
     .truth-check-highlight.score-medium-trust {
       background-color: rgba(234, 179, 8, 0.2);
-      border: 2px solid #eab308;
     }
     .truth-check-highlight.score-low-trust {
       background-color: rgba(239, 68, 68, 0.2);
-      border: 2px solid #ef4444;
     }
   `;
   document.head.appendChild(style);
